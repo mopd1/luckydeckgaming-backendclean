@@ -1,0 +1,312 @@
+console.log('Loading authRoutes.js');
+console.log('__dirname:', __dirname);
+console.log('Current working directory:', process.cwd());
+
+console.log('Requiring express');
+const express = require('express');
+const router = express.Router();
+console.log('Requiring models');
+const { User } = require('../models');
+console.log('Requiring jsonwebtoken');
+const jwt = require('jsonwebtoken');
+console.log('Requiring crypto');
+const crypto = require('crypto');
+console.log('Requiring bcrypt');
+const bcrypt = require('bcrypt');
+console.log('Requiring authMiddleware');
+const { authenticateToken } = require('../middleware/auth');
+const passport = require('passport');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+
+// Passport Google Strategy Configuration
+passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: process.env.GOOGLE_CALLBACK_URL
+}, async (accessToken, refreshToken, profile, done) => {
+    try {
+        // Find or create user
+        let user = await User.findOne({
+            where: { google_id: profile.id }
+        });
+
+        if (!user) {
+            user = await User.create({
+                google_id: profile.id,
+                email: profile.emails[0].value,
+                username: profile.displayName,
+                // Set other default values as needed
+            });
+        }
+
+        return done(null, user);
+    } catch (error) {
+        return done(error, null);
+    }
+}));
+
+// Initialize passport middleware
+router.use(passport.initialize());
+
+console.log('authenticateToken is:', typeof authenticateToken);
+
+router.get('/google',
+    passport.authenticate('google', {
+        scope: ['profile', 'email'],
+        session: false
+    })
+);
+
+router.post('/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const user = await User.findOne({ where: { username } });
+
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    // First, check if the password is stored as MD5
+    const hashedPassword = crypto.createHash('md5').update(password).digest('hex');
+    if (hashedPassword === user.password_hash) {
+      // If it matches MD5, update to bcrypt for future logins
+      const bcryptHash = await bcrypt.hash(password, 10);
+      await user.update({ password_hash: bcryptHash });
+    } else {
+      // If not MD5, check if it's a bcrypt hash
+      const isValidPassword = await bcrypt.compare(password, user.password_hash);
+      if (!isValidPassword) {
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
+    }
+
+    const token = user.generateToken();
+    const refreshToken = user.generateRefreshToken();
+
+    res.json({ token, refreshToken, user: { id: user.id, username: user.username } });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.post('/auth/google/mobile', async (req, res) => {
+    const { token } = req.body;
+    try {
+        const ticket = await client.verifyIdToken({
+            idToken: token,
+            audience: process.env.GOOGLE_CLIENT_ID
+        });
+        // Handle authentication...
+        res.json({ token: jwtToken });
+    } catch (error) {
+        res.status(401).json({ error: 'Invalid token' });
+    }
+});
+
+router.post('/refresh-token', async (req, res) => {
+  const { refreshToken } = req.body;
+
+  if (!refreshToken) {
+    return res.status(401).json({ error: 'Refresh token is required' });
+  }
+
+  try {
+    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+    const user = await User.findByPk(decoded.id);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const newToken = user.generateToken();
+    res.json({ token: newToken });
+  } catch (error) {
+    console.error('Refresh token error:', error);
+    res.status(401).json({ error: 'Invalid refresh token' });
+  }
+});
+
+router.post('/logout', (req, res) => {
+  // In a more advanced implementation, you might want to invalidate the token on the server-side
+  res.json({ message: 'Logged out successfully' });
+});
+
+router.get('/user', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.user.id, {
+      attributes: ['id', 'username', 'email', 'chips', 'gems', 'crm_opt_in']
+    });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json(user);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error fetching user data' });
+  }
+});
+
+router.put('/update-profile', authenticateToken, async (req, res) => {
+  try {
+    const { email, current_password, new_password, crm_opt_in } = req.body;
+    const user = await User.findByPk(req.user.Id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (current_password) {
+      const isPasswordValid = await bcrypt.compare(current_password, user.password_hash);
+      if (!isPasswordValid) {
+        return res.status(400).json({ message: "Current password is incorrect" });
+      }
+    }
+
+    if (email && email !== user.email) {
+      const verificationToken = crypto.randomBytes(20).toString('hex');
+      user.pending_email = email;
+      user.email_verification_token = verificationToken;
+      // Send verification email
+      await sendVerificationEmail(email, verificationToken);
+    }
+
+    if (new_password) {
+      user.password_hash = await bcrypt.hash(new_password, 10);
+    }
+
+    if (crm_opt_in !== undefined) {
+      user.crm_opt_in = crm_opt_in;
+    }
+
+    await user.save();
+
+    res.json({ message: "Profile updated successfully" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error updating profile" });
+  }
+});
+
+router.post('/verify-email', async (req, res) => {
+  try {
+    const { token } = req.body;
+    const user = await User.findOne({ where: { email_verification_token: token } });
+
+    if (!user) {
+      return res.status(400).json({ message: "Invalid verification token" });
+    }
+
+    user.email = user.pending_email;
+    user.pending_email = null;
+    user.email_verification_token = null;
+    await user.save();
+
+    res.json({ message: "Email verified successfully" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error verifying email" });
+  }
+});
+
+router.put('/update-chips', authenticateToken, async (req, res) => {
+  try {
+    const { chips } = req.body;
+    const user = await User.findByPk(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.chips = chips;
+    await user.save();
+
+    res.json({ message: "Chips updated successfully", chips: user.chips });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error updating chips" });
+  }
+});
+
+router.get('/check-status', (req, res) => {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+        return res.json({ authenticated: false });
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        res.json({
+            authenticated: true,
+            token: token,
+            user: decoded
+        });
+    } catch (error) {
+        res.json({ authenticated: false });
+    }
+});
+
+router.get('/google/callback',
+    passport.authenticate('google', {
+        session: false,
+        failureRedirect: '/login'
+    }),
+    async (req, res) => {
+        try {
+            const token = jwt.sign(
+                {
+                    id: req.user.id,
+                    email: req.user.email,
+                    auth_provider: 'google'
+                },
+                process.env.JWT_SECRET,
+                { expiresIn: '24h' }
+            );
+
+            // For web platform, redirect to game with token
+            res.send(`
+                <script>
+                    window.opener.handleGoogleCallback('${token}');
+                    window.close();
+                </script>
+            `);
+        } catch (error) {
+            console.error('Auth callback error:', error);
+            res.redirect('/login?error=authentication_failed');
+        }
+    }
+);
+
+router.get('/test-google-login', (req, res) => {
+    res.send(`
+        <html>
+            <body>
+                <h1>Test Google Login</h1>
+                <a href="/api/auth/google" style="
+                    display: inline-block;
+                    background-color: #4285f4;
+                    color: white;
+                    padding: 10px 20px;
+                    text-decoration: none;
+                    border-radius: 5px;
+                ">Login with Google</a>
+            </body>
+        </html>
+    `);
+});
+
+router.get('/test-google-config', (req, res) => {
+    res.json({
+        hasClientId: !!process.env.GOOGLE_CLIENT_ID,
+        hasClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
+        hasCallbackUrl: !!process.env.GOOGLE_CALLBACK_URL
+    });
+});
+
+// Helper function to send verification email (stub for now)
+async function sendVerificationEmail(email, token) {
+  console.log(`Verification email would be sent to ${email} with token ${token}`);
+  // Implement actual email sending later
+}
+
+module.exports = router;
