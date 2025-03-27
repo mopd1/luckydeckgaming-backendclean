@@ -60,9 +60,49 @@ const updateUserStatus = async (req, res) => {
     }
 };
 
+// Update action points
+const updateActionPoints = async (req, res) => {
+  try {
+    // Get user ID from auth token (req.user should be set by auth middleware)
+    const userId = req.user.id;
+    
+    // Log for debugging
+    console.log("Updating action points for user ID:", userId);
+    
+    // Get new action points value from request body
+    const { action_points } = req.body;
+    
+    if (action_points === undefined) {
+      return res.status(400).json({ message: "Missing action_points parameter" });
+    }
+    
+    // Find user by ID
+    const user = await User.findByPk(userId);
+    
+    if (!user) {
+      console.error(`User with ID ${userId} not found`);
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    // Update action points
+    user.action_points = action_points;
+    await user.save();
+    
+    return res.status(200).json({ 
+      success: true, 
+      action_points: user.action_points,
+      message: "Action points updated successfully" 
+    });
+  } catch (error) {
+    console.error("Error updating action points:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 module.exports = {
     searchUsers,
     getUserDetails,
     adjustUserBalance,
-    updateUserStatus
+    updateUserStatus,
+    updateActionPoints
 };

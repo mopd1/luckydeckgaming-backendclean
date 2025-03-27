@@ -15,13 +15,11 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    // Use the validatePassword method instead of direct comparison
     const isPasswordValid = await user.validatePassword(password);
     if (!isPasswordValid) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    // Generate tokens
     const token = jwt.sign(
       { id: user.id, username: user.username },
       process.env.JWT_SECRET,
@@ -33,7 +31,7 @@ router.post('/login', async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    // Return tokens and basic user info
+    // --- Corrected User Object in Response ---
     return res.json({
       token,
       refreshToken,
@@ -42,7 +40,7 @@ router.post('/login', async (req, res) => {
         username: user.username,
         balance: user.balance,
         gems: user.gems,
-        // If user.display_name is null, fallback to username
+        action_points: user.action_points || 0, // ADDED: Include action_points (default to 0 if null/undefined)
         display_name: user.display_name || user.username,
         welcome_completed: user.welcome_completed || false,
         avatar_data: user.avatar_data,
@@ -50,6 +48,7 @@ router.post('/login', async (req, res) => {
         language_preference: user.language_preference || 'en'
       }
     });
+    // -----------------------------------------
   } catch (error) {
     console.error('Login error:', error);
     return res.status(500).json({ message: 'Server error' });
@@ -196,19 +195,21 @@ router.get('/user', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Return user data including display_name or fallback
+    // --- Corrected User Object in Response ---
     return res.json({
       id: user.id,
       username: user.username,
-      email: user.email,
+      email: user.email, // Include email if needed by client
       balance: user.balance,
       gems: user.gems,
+      action_points: user.action_points || 0, // ADDED: Include action_points (default to 0 if null/undefined)
       display_name: user.display_name || user.username,
       welcome_completed: user.welcome_completed || false,
       avatar_data: user.avatar_data,
       owned_avatar_parts: user.owned_avatar_parts,
       language_preference: user.language_preference || 'en'
     });
+    // -----------------------------------------
   } catch (error) {
     console.error('Error fetching user data:', error);
     return res.status(500).json({ message: 'Error fetching user data' });
@@ -306,35 +307,6 @@ router.put('/update-avatar', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error updating avatar data:', error);
     return res.status(500).json({ message: 'Error updating avatar data' });
-  }
-});
-
-// Add action points update endpoint
-router.put('/update-action-points', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { action_points } = req.body;
-    
-    if (action_points === undefined) {
-      return res.status(400).json({ error: 'Action points value is required' });
-    }
-    
-    // Update the user's action points
-    const user = await db.User.findByPk(userId);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    
-    user.action_points = action_points;
-    await user.save();
-    
-    res.status(200).json({ 
-      message: 'Action points updated successfully',
-      action_points: user.action_points 
-    });
-  } catch (error) {
-    console.error('Error updating action points:', error);
-    res.status(500).json({ error: 'Failed to update action points' });
   }
 });
 
