@@ -161,6 +161,66 @@ router.put('/update-action-points', authenticateToken, async (req, res) => {
   }
 });
 
+// PUT update (OVERWRITE) user's action points
+router.put('/update-action-points', authenticateToken, async (req, res) => {
+  try {
+    const { action_points } = req.body; // This is the TOTAL value
+    console.log(`[OVERWRITE] Attempting to set action points for user ${req.user.id} to ${action_points}`);
+
+    if (typeof action_points !== 'number' || action_points < 0) {
+      return res.status(400).json({ message: 'Invalid action points value' });
+    }
+    const user = await User.findByPk(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    // --- Direct SET operation ---
+    user.action_points = action_points;
+    await user.save();
+    // --------------------------
+    console.log(`[OVERWRITE] User ${req.user.id} action points set successfully to ${action_points}`);
+    res.json({ message: 'Action points updated successfully', action_points: user.action_points });
+  } catch (error) {
+    console.error('[OVERWRITE] Error updating action points:', error);
+    res.status(500).json({ message: 'Error updating action points' });
+  }
+});
+
+// --- ADD NEW INCREMENT ENDPOINT ---
+router.post('/add-action-points', authenticateToken, async (req, res) => {
+    try {
+        const { amount_to_add } = req.body; // Expecting the amount to ADD
+        console.log(`[INCREMENT] Attempting to add ${amount_to_add} action points for user ${req.user.id}`);
+
+        if (typeof amount_to_add !== 'number' || amount_to_add === 0) {
+            // Allow adding 0? Maybe not useful. Allow negative? Depends on game logic.
+            // For now, require a non-zero number.
+            return res.status(400).json({ message: 'Invalid or zero amount_to_add value' });
+        }
+
+        const user = await User.findByPk(req.user.id);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // --- Use Atomic Increment ---
+        await user.increment('action_points', { by: amount_to_add });
+        // Note: user.action_points might not be updated in the instance after increment
+        // We need to reload to get the guaranteed new value if we want to return it accurately
+        await user.reload();
+        // --------------------------
+
+        console.log(`[INCREMENT] User ${req.user.id} action points incremented by ${amount_to_add}. New total: ${user.action_points}`);
+        res.json({
+            message: 'Action points added successfully',
+            new_total_action_points: user.action_points // Return the new total
+        });
+    } catch (error) {
+        console.error('[INCREMENT] Error adding action points:', error);
+        res.status(500).json({ message: 'Error adding action points' });
+    }
+});
+
 // DELETE a user
 router.delete('/:id', async (req, res) => {
   try {

@@ -307,34 +307,56 @@ router.put('/progress', authenticateToken, async (req, res) => {
         userProgress.completed = true;
 
         // Auto-award the reward
-        const user = await db.User.findByPk(userId);
+        // Find the user again to ensure we have the latest instance for increment
+        // Although findByPk might return the same instance, increment works directly on the DB.
+        const userToReward = await db.User.findByPk(userId);
 
-        if (user) {
-          // Apply the reward based on type
-          switch (task.reward_type) {
-            case 'gems':
-              user.gems += task.reward_amount;
-              break;
-            case 'chips':
-            case 'balance': // Support both terms
-              user.balance += task.reward_amount;
-              break;
-            case 'action_points':
-              if (!user.action_points) user.action_points = 0;
-              user.action_points += task.reward_amount;
-              break;
+        if (userToReward) { // Use userToReward instance for incrementing
+          console.log(`Task ${task_id} completed by user ${userId}. Applying reward: ${task.reward_amount} ${task.reward_type}.`); // Log reward attempt
+
+          // Apply the reward based on type using ATOMIC INCREMENTS
+          try { // Add try-catch around increments for better error logging
+            switch (task.reward_type) {
+              case 'gems':
+                // user.gems += task.reward_amount; // Old way
+                await userToReward.increment('gems', { by: task.reward_amount }); // New atomic way
+                console.log(`   - Atomically incremented gems by ${task.reward_amount} for user ${userId}.`);
+                break;
+              case 'chips':
+              case 'balance': // Support both terms
+                // user.balance += task.reward_amount; // Old way
+                await userToReward.increment('balance', { by: task.reward_amount }); // New atomic way
+                console.log(`   - Atomically incremented balance by ${task.reward_amount} for user ${userId}.`);
+                break;
+              case 'action_points':
+                // if (!user.action_points) user.action_points = 0; // Old way
+                // user.action_points += task.reward_amount; // Old way
+                await userToReward.increment('action_points', { by: task.reward_amount }); // New atomic way
+                console.log(`   - Atomically incremented action_points by ${task.reward_amount} for user ${userId}.`);
+                break;
+              default:
+                 console.log(`   - Unknown reward_type: ${task.reward_type}. No reward applied.`);
+            }
+
+            // Mark reward as claimed ONLY IF increment succeeded
+            userProgress.reward_claimed = true;
+            console.log(`   - Marked reward as claimed for task ${task_id}, user ${userId}.`);
+
+          } catch(incrementError) {
+              console.error(`   - FAILED to apply reward increment for user ${userId}, task ${task_id}:`, incrementError);
+              // Decide if you still want to mark reward_claimed = false here or handle differently
+              // For now, we won't mark it claimed if the increment fails.
           }
 
-          // Save the user with updated rewards
-          await user.save();
-
-          // Mark reward as claimed
-          userProgress.reward_claimed = true;
+        } else {
+           console.error(`   - Could not find user ${userId} to apply reward for task ${task_id}.`);
+           // Handle case where user somehow doesn't exist when trying to reward
         }
-      }
+      } // end if (isNewlyCompleted)
 
-      // Save progress
+      // Save progress (this saves completed status and reward_claimed status)
       await userProgress.save();
+      console.log(` - Saved UserTaskProgress for task ${task_id}, user ${userId}.`);
 
       res.status(200).json({
         task_id: task_id,
