@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateAdminToken } = require('../middleware/auth');
 const { 
   SeasonPass, 
   SeasonMilestone, 
@@ -15,7 +15,7 @@ const { google } = require('googleapis');
 /**
  * Get all season passes
  */
-router.get('/seasons', authenticateToken, async (req, res) => {
+router.get('/seasons', authenticateAdminToken, async (req, res) => {
   try {
     const seasons = await SeasonPass.findAll({
       order: [['created_at', 'DESC']]
@@ -31,7 +31,7 @@ router.get('/seasons', authenticateToken, async (req, res) => {
 /**
  * Get a specific season
  */
-router.get('/seasons/:seasonId', authenticateToken, async (req, res) => {
+router.get('/seasons/:seasonId', authenticateAdminToken, async (req, res) => {
   try {
     const season = await SeasonPass.findOne({
       where: { season_id: req.params.seasonId },
@@ -55,7 +55,7 @@ router.get('/seasons/:seasonId', authenticateToken, async (req, res) => {
 /**
  * Create a new season
  */
-router.post('/seasons', authenticateToken, async (req, res) => {
+router.post('/seasons', authenticateAdminToken, async (req, res) => {
   const transaction = await sequelize.transaction();
   
   try {
@@ -101,7 +101,7 @@ router.post('/seasons', authenticateToken, async (req, res) => {
 /**
  * Update a season
  */
-router.put('/seasons/:seasonId', authenticateToken, async (req, res) => {
+router.put('/seasons/:seasonId', authenticateAdminToken, async (req, res) => {
   try {
     const { 
       name, 
@@ -138,7 +138,7 @@ router.put('/seasons/:seasonId', authenticateToken, async (req, res) => {
 /**
  * Delete a season
  */
-router.delete('/seasons/:seasonId', authenticateToken, async (req, res) => {
+router.delete('/seasons/:seasonId', authenticateAdminToken, async (req, res) => {
   const transaction = await sequelize.transaction();
   
   try {
@@ -188,7 +188,7 @@ router.delete('/seasons/:seasonId', authenticateToken, async (req, res) => {
 /**
  * Get milestones for a season
  */
-router.get('/seasons/:seasonId/milestones', authenticateToken, async (req, res) => {
+router.get('/seasons/:seasonId/milestones', authenticateAdminToken, async (req, res) => {
   try {
     const milestones = await SeasonMilestone.findAll({
       where: { season_id: req.params.seasonId },
@@ -205,7 +205,7 @@ router.get('/seasons/:seasonId/milestones', authenticateToken, async (req, res) 
 /**
  * Create multiple milestones at once
  */
-router.post('/seasons/:seasonId/milestones', authenticateToken, async (req, res) => {
+router.post('/seasons/:seasonId/milestones', authenticateAdminToken, async (req, res) => {
   const transaction = await sequelize.transaction();
   
   try {
@@ -296,7 +296,7 @@ router.post('/seasons/:seasonId/milestones', authenticateToken, async (req, res)
 /**
  * Import milestones from Google Sheet
  */
-router.post('/import-sheet', authenticateToken, async (req, res) => {
+router.post('/import-sheet', authenticateAdminToken, async (req, res) => {
   const transaction = await sequelize.transaction();
   
   try {
@@ -412,7 +412,7 @@ router.post('/import-sheet', authenticateToken, async (req, res) => {
 /**
  * Get user progress for a season
  */
-router.get('/seasons/:seasonId/user-progress', authenticateToken, async (req, res) => {
+router.get('/seasons/:seasonId/user-progress', authenticateAdminToken, async (req, res) => {
   try {
     const { page = 1, limit = 50 } = req.query;
     
@@ -444,7 +444,7 @@ router.get('/seasons/:seasonId/user-progress', authenticateToken, async (req, re
 /**
  * Get season pass analytics 
  */
-router.get('/seasons/:seasonId/analytics', authenticateToken, async (req, res) => {
+router.get('/seasons/:seasonId/analytics', authenticateAdminToken, async (req, res) => {
   try {
     const seasonId = req.params.seasonId;
     
