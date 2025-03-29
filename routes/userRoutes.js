@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { User } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
+const { checkSeasonPassProgress } = require('../utils/seasonPassUtils');
 
 // PUT update user settings - IMPORTANT: This specific route must come BEFORE any routes with path parameters like /:id
 router.put('/settings', authenticateToken, async (req, res) => {
@@ -174,12 +175,20 @@ router.put('/update-action-points', authenticateToken, async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    // --- Direct SET operation ---
+    
+    // Direct SET operation
     user.action_points = action_points;
     await user.save();
-    // --------------------------
+    
+    // NEW: Check for season pass progress with the updated action points
+    const newMilestones = await checkSeasonPassProgress(req.user.id, action_points);
+    
     console.log(`[OVERWRITE] User ${req.user.id} action points set successfully to ${action_points}`);
-    res.json({ message: 'Action points updated successfully', action_points: user.action_points });
+    res.json({ 
+      message: 'Action points updated successfully', 
+      action_points: user.action_points,
+      new_milestones: newMilestones.length > 0 ? newMilestones : null
+    });
   } catch (error) {
     console.error('[OVERWRITE] Error updating action points:', error);
     res.status(500).json({ message: 'Error updating action points' });
@@ -193,8 +202,6 @@ router.post('/add-action-points', authenticateToken, async (req, res) => {
         console.log(`[INCREMENT] Attempting to add ${amount_to_add} action points for user ${req.user.id}`);
 
         if (typeof amount_to_add !== 'number' || amount_to_add === 0) {
-            // Allow adding 0? Maybe not useful. Allow negative? Depends on game logic.
-            // For now, require a non-zero number.
             return res.status(400).json({ message: 'Invalid or zero amount_to_add value' });
         }
 
@@ -203,17 +210,19 @@ router.post('/add-action-points', authenticateToken, async (req, res) => {
             return res.status(404).json({ message: 'User not found' });
         }
 
-        // --- Use Atomic Increment ---
+        // Use Atomic Increment
         await user.increment('action_points', { by: amount_to_add });
-        // Note: user.action_points might not be updated in the instance after increment
-        // We need to reload to get the guaranteed new value if we want to return it accurately
+        // Reload to get the guaranteed new value
         await user.reload();
-        // --------------------------
 
+        // NEW: Check for season pass progress with the updated action points
+        const newMilestones = await checkSeasonPassProgress(req.user.id, user.action_points);
+        
         console.log(`[INCREMENT] User ${req.user.id} action points incremented by ${amount_to_add}. New total: ${user.action_points}`);
         res.json({
             message: 'Action points added successfully',
-            new_total_action_points: user.action_points // Return the new total
+            new_total_action_points: user.action_points,
+            new_milestones: newMilestones.length > 0 ? newMilestones : null
         });
     } catch (error) {
         console.error('[INCREMENT] Error adding action points:', error);

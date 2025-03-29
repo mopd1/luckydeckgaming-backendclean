@@ -6,6 +6,7 @@ const path = require('path');
 const userRoutes = require('./routes/userRoutes');
 const economyRoutes = require('./routes/economyRoutes');
 const dailyTasksProxy = require('./routes/dailyTasksProxy');
+const seasonPassAdminRoutes = require('./routes/seasonPassAdminRoutes');
 
 // Create Express app
 const app = express();
@@ -35,6 +36,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/economy', economyRoutes);
 app.use('/api/daily-tasks', dailyTasksProxy);
+app.use('/api/admin/season-pass', seasonPassAdminRoutes);
 
 // Placeholder for other routes that haven't been implemented yet
 app.use('/api/database', (req, res) => {

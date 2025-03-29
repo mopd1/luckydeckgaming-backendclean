@@ -4,6 +4,7 @@ const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const db = require('../models');
 const { Op } = require('sequelize');
+const { checkSeasonPassProgress } = require('../utils/seasonPassUtils');
 
 // Get the current daily tasks for the user
 router.get('/', authenticateToken, async (req, res) => {
@@ -333,10 +334,18 @@ router.put('/progress', authenticateToken, async (req, res) => {
                 // user.action_points += task.reward_amount; // Old way
                 await userToReward.increment('action_points', { by: task.reward_amount }); // New atomic way
                 console.log(`   - Atomically incremented action_points by ${task.reward_amount} for user ${userId}.`);
+
+                // Check for season pass progress
+                const updatedUser = await db.User.findByPk(userId);
+                const newMilestones = await checkSeasonPassProgress(userId, updatedUser.action_points);
+                if (newMilestones.length > 0) {
+                  console.log(`   - User ${userId} unlocked ${newMilestones.length} season pass milestones`);
+                }
                 break;
+
               default:
-                 console.log(`   - Unknown reward_type: ${task.reward_type}. No reward applied.`);
-            }
+                console.log(`   - Unknown reward_type: ${task.reward_type}. No reward applied.`);
+              }
 
             // Mark reward as claimed ONLY IF increment succeeded
             userProgress.reward_claimed = true;

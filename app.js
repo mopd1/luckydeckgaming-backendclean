@@ -16,6 +16,8 @@ const helmet = require('helmet');
 const port = process.env.PORT || 3000;
 const passport = require('passport');
 const dailyTaskRoutes = require('./routes/dailyTaskRoutes');
+const seasonPassRoutes = require('./routes/seasonPassRoutes');
+const { scheduleSeasonCreation } = require('./utils/seasonAutoCreation');
 
 // Trust nginx proxy
 if (process.env.NODE_ENV === 'production') {
@@ -153,6 +155,7 @@ app.use('/api/store-transactions', storeTransactionRoutes);
 app.use('/api/balance', require('./routes/balanceRoutes'));
 app.use('/api/daily-tasks', dailyTaskRoutes);
 app.use('/api/player-grading', playerGradingRoutes);
+app.use('/api/season-pass', seasonPassRoutes);
 
 // Default routes without rate limiting
 app.use('/api', indexRoutes);
@@ -247,6 +250,11 @@ server.listen(port, '0.0.0.0', () => {
         environment: process.env.NODE_ENV || 'development'
     }));
 });
+
+// Schedule the season creation job if in production
+if (process.env.NODE_ENV === 'production') {
+  scheduleSeasonCreation();
+}
 
 // Graceful shutdown handling
 process.on('SIGTERM', () => {
