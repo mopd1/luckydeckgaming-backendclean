@@ -100,7 +100,6 @@
             <v-row>
               <v-col cols="12" sm="6">
                 <v-text-field
-                  :key="formattedStartDate"
                   :value="formattedStartDate"
                   label="Start Date"
                   prepend-icon="mdi-calendar"
@@ -114,7 +113,6 @@
 
               <v-col cols="12" sm="6">
                 <v-text-field
-                  :key="formattedEndDate"
                   :value="formattedEndDate"
                   label="End Date"
                   prepend-icon="mdi-calendar"
@@ -143,7 +141,7 @@
 
           <v-dialog ref="startDateDialogRef" v-model="startDateDialog" width="auto">
               <v-date-picker
-                  v-model="editedSeason.start_date"
+                  v-model="tempPickerStartDate"
                   show-adjacent-months
                   hide-header
               >
@@ -157,7 +155,7 @@
 
           <v-dialog ref="endDateDialogRef" v-model="endDateDialog" width="auto">
                <v-date-picker
-                  v-model="editedSeason.end_date"
+                  v-model="tempPickerEndDate"
                   :min="editedSeason.start_date ? editedSeason.start_date.toISOString().split('T')[0] : undefined"
                   show-adjacent-months
                   hide-header
@@ -195,23 +193,24 @@
 </template>
 
 <script setup>
-// Added computed
-import { ref, reactive, onMounted, nextTick, watch, computed } from 'vue'
+import { ref, onMounted, nextTick, watch, computed } from 'vue' // Removed reactive
 import axios from '../../services/api'
 
 // State variables
 const seasons = ref([])
 const loading = ref(true)
-const dialog = ref(false) // Main create/edit dialog
-const startDateDialog = ref(false) // Start date picker dialog
-const endDateDialog = ref(false) // End date picker dialog
-const confirmDialog = ref(false) // Confirmation dialog for activation
+const dialog = ref(false)
+const startDateDialog = ref(false)
+const endDateDialog = ref(false)
+const confirmDialog = ref(false)
 const confirmMessage = ref('')
 const confirmActionCallback = ref(() => {})
 const valid = ref(false)
-const form = ref(null) // Ref for v-form
+const form = ref(null)
 const isEditing = ref(false)
 
+const tempPickerStartDate = ref(null);
+const tempPickerEndDate = ref(null);
 const tempStartDate = ref(null);
 const tempEndDate = ref(null);
 
@@ -224,7 +223,8 @@ const defaultSeason = {
   is_active: false
 }
 
-const editedSeason = reactive({...defaultSeason})
+// Use ref for the edited object
+const editedSeason = ref({...defaultSeason})
 
 const headers = [
   { title: 'Season ID', key: 'season_id', sortable: true, width: '10%' },
@@ -242,28 +242,24 @@ onMounted(async () => {
 
 // --- Computed Properties for Display ---
 const formattedStartDate = computed(() => {
-  console.log("Computed: formattedStartDate evaluating with:", editedSeason.start_date);
-  const formatted = formatDate(editedSeason.start_date);
-  console.log("Computed: formattedStartDate returning:", formatted);
-  return formatted;
+  // Access .value because editedSeason is a ref
+  return formatDate(editedSeason.value.start_date);
 });
 
 const formattedEndDate = computed(() => {
-  console.log("Computed: formattedEndDate evaluating with:", editedSeason.end_date);
-  const formatted = formatDate(editedSeason.end_date);
-  console.log("Computed: formattedEndDate returning:", formatted);
-  return formatted;
+   // Access .value because editedSeason is a ref
+  return formatDate(editedSeason.value.end_date);
 });
 
-// --- Watchers (Trigger validation when dates change) ---
-watch(() => editedSeason.start_date, (newDate, oldDate) => {
+// --- Watchers ---
+watch(() => editedSeason.value.start_date, (newDate, oldDate) => {
   if (newDate?.getTime() !== oldDate?.getTime()) {
       nextTick(() => {
         form.value?.validate();
       });
   }
 });
-watch(() => editedSeason.end_date, (newDate, oldDate) => {
+watch(() => editedSeason.value.end_date, (newDate, oldDate) => {
   if (newDate?.getTime() !== oldDate?.getTime()) {
       nextTick(() => {
         form.value?.validate();
@@ -293,35 +289,37 @@ async function fetchSeasons() {
 
 function openCreateDialog() {
   console.log("Opening create dialog...");
-  isEditing.value = false
-  Object.assign(editedSeason, {
+  isEditing.value = false;
+  // Assign to .value when using ref
+  editedSeason.value = {
     season_id: null,
     name: '',
     description: '',
     start_date: new Date(),
     end_date: new Date(new Date().setMonth(new Date().getMonth() + 1)),
     is_active: false
-  })
+  };
   nextTick(() => {
       form.value?.resetValidation();
       valid.value = false;
   });
-  dialog.value = true
+  dialog.value = true;
 }
 
 function editSeason(season) {
   console.log("Opening edit dialog for season:", season.season_id);
-  isEditing.value = true
-  Object.assign(editedSeason, {
+  isEditing.value = true;
+   // Assign to .value when using ref
+  editedSeason.value = {
     ...season,
     start_date: season.start_date instanceof Date ? season.start_date : (season.start_date ? new Date(season.start_date) : null),
     end_date: season.end_date instanceof Date ? season.end_date : (season.end_date ? new Date(season.end_date) : null),
-  });
+  };
    nextTick(() => {
       form.value?.resetValidation();
       valid.value = false;
   });
-  dialog.value = true
+  dialog.value = true;
 }
 
 function closeDialog() {
@@ -330,44 +328,42 @@ function closeDialog() {
 
 // --- Date Picker Handling ---
 function openStartDatePicker() {
-    console.log("Opening start date picker. Current start date:", editedSeason.start_date);
-    tempStartDate.value = editedSeason.start_date ? new Date(editedSeason.start_date.getTime()) : null;
+    console.log("Opening start date picker. Current start date:", editedSeason.value.start_date);
+    tempStartDate.value = editedSeason.value.start_date ? new Date(editedSeason.value.start_date.getTime()) : null;
+    tempPickerStartDate.value = editedSeason.value.start_date ? new Date(editedSeason.value.start_date.getTime()) : new Date();
     startDateDialog.value = true;
 }
 
 function openEndDatePicker() {
-    console.log("Opening end date picker. Current end date:", editedSeason.end_date);
-    tempEndDate.value = editedSeason.end_date ? new Date(editedSeason.end_date.getTime()) : null;
+    console.log("Opening end date picker. Current end date:", editedSeason.value.end_date);
+    tempEndDate.value = editedSeason.value.end_date ? new Date(editedSeason.value.end_date.getTime()) : null;
+    tempPickerEndDate.value = editedSeason.value.end_date ? new Date(editedSeason.value.end_date.getTime()) : new Date();
     endDateDialog.value = true;
 }
 
 function confirmStartDate() {
-    console.log("Confirmed start date:", editedSeason.start_date);
+    editedSeason.value.start_date = tempPickerStartDate.value; // Update .value
+    console.log("Confirmed start date, setting editedSeason.start_date to:", editedSeason.value.start_date);
     startDateDialog.value = false;
+    nextTick(() => form.value?.validate());
 }
 
 function cancelStartDate() {
-    console.log("Cancelled start date picker. Reverting to:", tempStartDate.value);
-    if (tempStartDate.value !== null) {
-       editedSeason.start_date = tempStartDate.value;
-    } else {
-        editedSeason.start_date = null;
-    }
+    console.log("Cancelled start date picker.");
+    // No need to update editedSeason on cancel
     startDateDialog.value = false;
 }
 
 function confirmEndDate() {
-    console.log("Confirmed end date:", editedSeason.end_date);
+    editedSeason.value.end_date = tempPickerEndDate.value; // Update .value
+    console.log("Confirmed end date, setting editedSeason.end_date to:", editedSeason.value.end_date);
     endDateDialog.value = false;
+    nextTick(() => form.value?.validate());
 }
 
 function cancelEndDate() {
-    console.log("Cancelled end date picker. Reverting to:", tempEndDate.value);
-     if (tempEndDate.value !== null) {
-        editedSeason.end_date = tempEndDate.value;
-     } else {
-         editedSeason.end_date = null;
-     }
+    console.log("Cancelled end date picker.");
+    // No need to update editedSeason on cancel
     endDateDialog.value = false;
 }
 
@@ -381,30 +377,32 @@ async function saveSeason() {
 
   loading.value = true
 
+  // *** USE LOCAL TIME FOR API PAYLOAD ***
   const formatDateForAPI = (date) => {
       if (date instanceof Date && !isNaN(date)) {
-          const year = date.getUTCFullYear();
-          const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
-          const day = date.getUTCDate().toString().padStart(2, '0');
+          const year = date.getFullYear(); // Use local year
+          const month = (date.getMonth() + 1).toString().padStart(2, '0'); // Use local month
+          const day = date.getDate().toString().padStart(2, '0'); // Use local day
           return `${year}-${month}-${day}`;
       }
       return null;
   };
 
+  // Create data object from editedSeason.value
   const seasonData = {
-    name: editedSeason.name,
-    description: editedSeason.description,
-    start_date: formatDateForAPI(editedSeason.start_date),
-    end_date: formatDateForAPI(editedSeason.end_date),
-    is_active: editedSeason.is_active
+    name: editedSeason.value.name,
+    description: editedSeason.value.description,
+    start_date: formatDateForAPI(editedSeason.value.start_date),
+    end_date: formatDateForAPI(editedSeason.value.end_date),
+    is_active: editedSeason.value.is_active
   };
 
   console.log("Attempting to save season. Payload being sent:", JSON.stringify(seasonData, null, 2));
 
   try {
-    if (isEditing.value && editedSeason.season_id) {
-      console.log(`Sending PUT request to /admin/season-pass/seasons/${editedSeason.season_id}`);
-      await axios.put(`/admin/season-pass/seasons/${editedSeason.season_id}`, seasonData);
+    if (isEditing.value && editedSeason.value.season_id) {
+      console.log(`Sending PUT request to /admin/season-pass/seasons/${editedSeason.value.season_id}`);
+      await axios.put(`/admin/season-pass/seasons/${editedSeason.value.season_id}`, seasonData);
     } else {
       console.log("Sending POST request to /admin/season-pass/seasons");
       await axios.post('/admin/season-pass/seasons', seasonData);
@@ -469,23 +467,17 @@ function viewMilestones(season) {
 
 // --- Formatting ---
 function formatDate(dateValue) {
-  console.log("formatDate received:", dateValue, typeof dateValue);
-  if (!dateValue) {
-      console.log("formatDate returning empty (falsy value)");
-      return '';
-  }
+  // Display formatting (remains unchanged)
+  if (!dateValue) return '';
   const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
   if (isNaN(date.getTime())) {
-    console.warn("formatDate received invalid date object after conversion:", dateValue);
     return '';
   }
-  const result = date.toLocaleDateString('en-GB', {
+  return date.toLocaleDateString('en-GB', {
     year: 'numeric',
     month: 'short',
     day: '2-digit'
   });
-  console.log("formatDate returning formatted:", result);
-  return result;
 }
 </script>
 
