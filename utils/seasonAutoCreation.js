@@ -22,7 +22,7 @@ function generateDefaultMilestonePoints(milestoneCount = 30) {
   
   // Last milestones scale up more steeply
   for (let i = 20; i < milestoneCount; i++) {
-    points.push(6000 + (i - 19) * 500);
+    points.push(6000 + (i - 19) * 800);
   }
   
   return points;

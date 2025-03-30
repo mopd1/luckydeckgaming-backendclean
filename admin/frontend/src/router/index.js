@@ -79,6 +79,12 @@ const routes = [
     name: 'DailyTasks',
     component: () => import('../views/DailyTasks/Index.vue'),
     meta: { requiresAuth: true, permission: 'view_config' }
+  },
+  {
+    path: '/season-pass',
+    name: 'SeasonPass',
+    component: () => import('../views/SeasonPass/Index.vue'),
+    meta: { requiresAuth: true, permission: 'view_config' }
   }
 ]
 

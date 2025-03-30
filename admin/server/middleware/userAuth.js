@@ -4,12 +4,15 @@ const { User } = require('../models');
 
 const authenticateToken = async (req, res, next) => {
   try {
+    console.log('Auth debug - Headers:', req.headers);
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('Auth debug - Missing or invalid auth header:', authHeader);
       return res.status(401).json({ message: 'Authorization header missing or invalid' });
     }
 
     const token = authHeader.split(' ')[1];
+    console.log('Auth debug - Token received:', token.substring(0, 10) + '...');
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
 
     // Look up the user in the actual users table

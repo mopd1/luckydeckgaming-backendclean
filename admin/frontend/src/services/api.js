@@ -15,10 +15,13 @@ const api = axios.create({
 api.interceptors.request.use(
   config => {
     console.log('API Request:', config.method.toUpperCase(), config.url, config.data);
-    
+
     const token = localStorage.getItem('admin_token');
+    console.log('Debug - Token from localStorage:', token ? token.substring(0, 10) + '...' : 'null');
+    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      console.log('Debug - Authorization header set');
     }
     return config;
   },

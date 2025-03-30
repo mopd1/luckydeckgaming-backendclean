@@ -69,6 +69,12 @@
         prepend-icon="mdi-calendar-check"
         :to="{ name: 'DailyTasks' }"
       ></v-list-item>
+      <v-list-item
+        v-if="hasPermission('view_config')"
+        title="Season Pass"
+        prepend-icon="mdi-chart-timeline-variant"
+        :to="{ name: 'SeasonPass' }"
+      ></v-list-item>
     </v-list>
   </v-navigation-drawer>
 </template>

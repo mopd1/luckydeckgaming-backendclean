@@ -63,6 +63,11 @@ module.exports = (sequelize, DataTypes) => {
       foreignKey: 'season_id',
       targetKey: 'season_id'
     });
+
+  // SeasonMilestone.hasMany(models.MilestoneReward, {
+    // foreignKey: 'milestone_id',
+    // sourceKey: 'milestone_id'
+    // });
   };
 
   return SeasonMilestone;
