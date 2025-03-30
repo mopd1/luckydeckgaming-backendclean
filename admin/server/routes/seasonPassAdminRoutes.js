@@ -1,12 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/userAuth');
-const { User, sequelize } = require('../models');
-const {
-  SeasonPass,
-  SeasonMilestone,
-  UserSeasonProgress
-} = require('../../../models');
+const { User, SeasonPass, SeasonMilestone, UserSeasonProgress, sequelize } = require('../../../models');
 const { Op } = require('sequelize');
 const axios = require('axios');
 const { google } = require('googleapis');

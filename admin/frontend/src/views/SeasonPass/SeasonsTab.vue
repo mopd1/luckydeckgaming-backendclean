@@ -72,8 +72,7 @@
       </v-data-table>
     </v-card>
 
-    <!-- Create/Edit Season Dialog -->
-    <v-dialog v-model="dialog" max-width="600px">
+    <v-dialog v-model="dialog" max-width="600px" persistent>
       <v-card>
         <v-card-title>
           <span class="text-h5">{{ isEditing ? 'Edit Season' : 'Create New Season' }}</span>
@@ -86,65 +85,48 @@
               label="Season Name"
               required
               :rules="[v => !!v || 'Name is required']"
+              variant="outlined"
+              density="compact"
             ></v-text-field>
 
             <v-textarea
               v-model="editedSeason.description"
               label="Description"
               rows="3"
+              variant="outlined"
+              density="compact"
             ></v-textarea>
 
             <v-row>
               <v-col cols="12" sm="6">
-                <v-dialog
-                  ref="startDateDialog"
-                  v-model="startDateDialog"
-                  width="290px"
-                >
-                  <template v-slot:activator="{ props }">
-                    <v-text-field
-                      :value="formatDate(editedSeason.start_date)"
-                      label="Start Date"
-                      prepend-icon="mdi-calendar"
-                      readonly
-                      v-bind="props"
-                      :rules="[v => !!editedSeason.start_date || 'Start date is required']"
-                    ></v-text-field>
-                  </template>
-                  <v-date-picker v-model="editedSeason.start_date">
-                    <template v-slot:actions>
-                      <v-spacer></v-spacer>
-                      <v-btn text color="grey" @click="startDateDialog = false">Cancel</v-btn>
-                      <v-btn text color="primary" @click="startDateSelected">OK</v-btn>
-                    </template>
-                  </v-date-picker>
-                </v-dialog>
+                <v-text-field
+                  :key="formattedStartDate"
+                  :value="formattedStartDate"
+                  label="Start Date"
+                  prepend-icon="mdi-calendar"
+                  readonly
+                  @click="openStartDatePicker"
+                  :rules="[v => !!editedSeason.start_date || 'Start date is required']"
+                  variant="outlined"
+                  density="compact"
+                ></v-text-field>
               </v-col>
 
               <v-col cols="12" sm="6">
-                <v-dialog
-                  ref="endDateDialog"
-                  v-model="endDateDialog"
-                  width="290px"
-                >
-                  <template v-slot:activator="{ props }">
-                    <v-text-field
-                      :value="formatDate(editedSeason.end_date)"
-                      label="End Date"
-                      prepend-icon="mdi-calendar"
-                      readonly
-                      v-bind="props"
-                      :rules="[v => !!editedSeason.end_date || 'End date is required']"
-                    ></v-text-field>
-                  </template>
-                  <v-date-picker v-model="editedSeason.end_date">
-                    <template v-slot:actions>
-                      <v-spacer></v-spacer>
-                      <v-btn text color="grey" @click="endDateDialog = false">Cancel</v-btn>
-                      <v-btn text color="primary" @click="endDateSelected">OK</v-btn>
-                    </template>
-                  </v-date-picker>
-                </v-dialog>
+                <v-text-field
+                  :key="formattedEndDate"
+                  :value="formattedEndDate"
+                  label="End Date"
+                  prepend-icon="mdi-calendar"
+                  readonly
+                  @click="openEndDatePicker"
+                  :rules="[
+                    v => !!editedSeason.end_date || 'End date is required',
+                    v => !editedSeason.start_date || !editedSeason.end_date || new Date(editedSeason.end_date) >= new Date(editedSeason.start_date) || 'End date must be after start date'
+                  ]"
+                  variant="outlined"
+                  density="compact"
+                ></v-text-field>
               </v-col>
             </v-row>
 
@@ -154,31 +136,58 @@
               label="Active Season"
               hint="Only one season can be active at a time"
               persistent-hint
+              density="compact"
+              inset
             ></v-switch>
           </v-form>
+
+          <v-dialog ref="startDateDialogRef" v-model="startDateDialog" width="auto">
+              <v-date-picker
+                  v-model="editedSeason.start_date"
+                  show-adjacent-months
+                  hide-header
+              >
+                  <template v-slot:actions>
+                      <v-spacer></v-spacer>
+                      <v-btn text color="grey" @click.stop="cancelStartDate">Cancel</v-btn>
+                      <v-btn text color="primary" @click.stop="confirmStartDate">OK</v-btn>
+                  </template>
+              </v-date-picker>
+          </v-dialog>
+
+          <v-dialog ref="endDateDialogRef" v-model="endDateDialog" width="auto">
+               <v-date-picker
+                  v-model="editedSeason.end_date"
+                  :min="editedSeason.start_date ? editedSeason.start_date.toISOString().split('T')[0] : undefined"
+                  show-adjacent-months
+                  hide-header
+              >
+                  <template v-slot:actions>
+                      <v-spacer></v-spacer>
+                      <v-btn text color="grey" @click.stop="cancelEndDate">Cancel</v-btn>
+                      <v-btn text color="primary" @click.stop="confirmEndDate">OK</v-btn>
+                  </template>
+              </v-date-picker>
+          </v-dialog>
+
         </v-card-text>
 
         <v-card-actions>
           <v-spacer></v-spacer>
-          <v-btn color="blue-darken-1" variant="text" @click="dialog = false">Cancel</v-btn>
-          <v-btn color="blue-darken-1" variant="text" @click="saveSeason" :disabled="!valid">Save</v-btn>
+          <v-btn color="grey-darken-1" variant="text" @click="closeDialog">Cancel</v-btn>
+          <v-btn color="blue-darken-1" variant="elevated" @click="saveSeason" :disabled="!valid">Save</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
 
-    <!-- Confirmation Dialog -->
     <v-dialog v-model="confirmDialog" max-width="400px">
       <v-card>
         <v-card-title class="text-h5">Confirm</v-card-title>
-
-        <v-card-text>
-          {{ confirmMessage }}
-        </v-card-text>
-
+        <v-card-text>{{ confirmMessage }}</v-card-text>
         <v-card-actions>
           <v-spacer></v-spacer>
           <v-btn color="grey-darken-1" variant="text" @click="confirmDialog = false">Cancel</v-btn>
-          <v-btn color="red-darken-1" variant="text" @click="confirmAction">Confirm</v-btn>
+          <v-btn color="red-darken-1" variant="text" @click="executeConfirmAction">Confirm</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -186,68 +195,94 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-// Import the configured API service instead of axios directly
+// Added computed
+import { ref, reactive, onMounted, nextTick, watch, computed } from 'vue'
 import axios from '../../services/api'
-
-// Data table headers
-const headers = [
-  { title: 'Season ID', key: 'season_id', sortable: true },
-  { title: 'Name', key: 'name', sortable: true },
-  { title: 'Start Date', key: 'start_date', sortable: true },
-  { title: 'End Date', key: 'end_date', sortable: true },
-  { title: 'Status', key: 'is_active', sortable: true },
-  { title: 'Actions', key: 'actions', sortable: false }
-]
 
 // State variables
 const seasons = ref([])
 const loading = ref(true)
-const dialog = ref(false)
-const startDateDialog = ref(false)
-const endDateDialog = ref(false)
-const confirmDialog = ref(false)
+const dialog = ref(false) // Main create/edit dialog
+const startDateDialog = ref(false) // Start date picker dialog
+const endDateDialog = ref(false) // End date picker dialog
+const confirmDialog = ref(false) // Confirmation dialog for activation
 const confirmMessage = ref('')
-const confirmAction = ref(() => {})
+const confirmActionCallback = ref(() => {})
 const valid = ref(false)
-const form = ref(null)
+const form = ref(null) // Ref for v-form
 const isEditing = ref(false)
 
-// Default empty season
+const tempStartDate = ref(null);
+const tempEndDate = ref(null);
+
 const defaultSeason = {
+  season_id: null,
   name: '',
   description: '',
   start_date: new Date(),
   end_date: new Date(new Date().setMonth(new Date().getMonth() + 1)),
-  is_active: true
+  is_active: false
 }
 
-// Edited season (for the form)
 const editedSeason = reactive({...defaultSeason})
 
-// Fetch seasons when component mounts
+const headers = [
+  { title: 'Season ID', key: 'season_id', sortable: true, width: '10%' },
+  { title: 'Name', key: 'name', sortable: true, width: '25%' },
+  { title: 'Start Date', key: 'start_date', sortable: true, width: '15%' },
+  { title: 'End Date', key: 'end_date', sortable: true, width: '15%' },
+  { title: 'Status', key: 'is_active', sortable: true, width: '10%' },
+  { title: 'Actions', key: 'actions', sortable: false, width: '25%', align: 'end' }
+]
+
+// --- Lifecycle ---
 onMounted(async () => {
   await fetchSeasons()
 })
 
-// Handle date selection
-function startDateSelected() {
-  console.log("Selected start date:", editedSeason.start_date);
-  startDateDialog.value = false;
-}
+// --- Computed Properties for Display ---
+const formattedStartDate = computed(() => {
+  console.log("Computed: formattedStartDate evaluating with:", editedSeason.start_date);
+  const formatted = formatDate(editedSeason.start_date);
+  console.log("Computed: formattedStartDate returning:", formatted);
+  return formatted;
+});
 
-function endDateSelected() {
-  console.log("Selected end date:", editedSeason.end_date);
-  endDateDialog.value = false;
-}
+const formattedEndDate = computed(() => {
+  console.log("Computed: formattedEndDate evaluating with:", editedSeason.end_date);
+  const formatted = formatDate(editedSeason.end_date);
+  console.log("Computed: formattedEndDate returning:", formatted);
+  return formatted;
+});
 
-// Fetch season data from API
+// --- Watchers (Trigger validation when dates change) ---
+watch(() => editedSeason.start_date, (newDate, oldDate) => {
+  if (newDate?.getTime() !== oldDate?.getTime()) {
+      nextTick(() => {
+        form.value?.validate();
+      });
+  }
+});
+watch(() => editedSeason.end_date, (newDate, oldDate) => {
+  if (newDate?.getTime() !== oldDate?.getTime()) {
+      nextTick(() => {
+        form.value?.validate();
+      });
+  }
+});
+
+
+// --- Methods ---
+
 async function fetchSeasons() {
   loading.value = true
-
   try {
     const response = await axios.get('/admin/season-pass/seasons')
-    seasons.value = response.data
+    seasons.value = response.data.map(season => ({
+      ...season,
+      start_date: season.start_date ? new Date(season.start_date) : null,
+      end_date: season.end_date ? new Date(season.end_date) : null,
+    }));
   } catch (error) {
     console.error('Error fetching seasons:', error)
     alert('Failed to load seasons data')
@@ -256,110 +291,212 @@ async function fetchSeasons() {
   }
 }
 
-// Open dialog to create new season
 function openCreateDialog() {
+  console.log("Opening create dialog...");
   isEditing.value = false
-  Object.assign(editedSeason, defaultSeason)
+  Object.assign(editedSeason, {
+    season_id: null,
+    name: '',
+    description: '',
+    start_date: new Date(),
+    end_date: new Date(new Date().setMonth(new Date().getMonth() + 1)),
+    is_active: false
+  })
+  nextTick(() => {
+      form.value?.resetValidation();
+      valid.value = false;
+  });
   dialog.value = true
 }
 
-// Open dialog to edit existing season
 function editSeason(season) {
+  console.log("Opening edit dialog for season:", season.season_id);
   isEditing.value = true
-  Object.assign(editedSeason, season)
-  ensureDateObjects()
+  Object.assign(editedSeason, {
+    ...season,
+    start_date: season.start_date instanceof Date ? season.start_date : (season.start_date ? new Date(season.start_date) : null),
+    end_date: season.end_date instanceof Date ? season.end_date : (season.end_date ? new Date(season.end_date) : null),
+  });
+   nextTick(() => {
+      form.value?.resetValidation();
+      valid.value = false;
+  });
   dialog.value = true
 }
 
-// Ensure dates are Date objects
-function ensureDateObjects() {
-  if (typeof editedSeason.start_date === 'string') {
-    editedSeason.start_date = new Date(editedSeason.start_date);
-  }
-  if (typeof editedSeason.end_date === 'string') {
-    editedSeason.end_date = new Date(editedSeason.end_date);
-  }
+function closeDialog() {
+    dialog.value = false;
+}
+
+// --- Date Picker Handling ---
+function openStartDatePicker() {
+    console.log("Opening start date picker. Current start date:", editedSeason.start_date);
+    tempStartDate.value = editedSeason.start_date ? new Date(editedSeason.start_date.getTime()) : null;
+    startDateDialog.value = true;
+}
+
+function openEndDatePicker() {
+    console.log("Opening end date picker. Current end date:", editedSeason.end_date);
+    tempEndDate.value = editedSeason.end_date ? new Date(editedSeason.end_date.getTime()) : null;
+    endDateDialog.value = true;
+}
+
+function confirmStartDate() {
+    console.log("Confirmed start date:", editedSeason.start_date);
+    startDateDialog.value = false;
+}
+
+function cancelStartDate() {
+    console.log("Cancelled start date picker. Reverting to:", tempStartDate.value);
+    if (tempStartDate.value !== null) {
+       editedSeason.start_date = tempStartDate.value;
+    } else {
+        editedSeason.start_date = null;
+    }
+    startDateDialog.value = false;
+}
+
+function confirmEndDate() {
+    console.log("Confirmed end date:", editedSeason.end_date);
+    endDateDialog.value = false;
+}
+
+function cancelEndDate() {
+    console.log("Cancelled end date picker. Reverting to:", tempEndDate.value);
+     if (tempEndDate.value !== null) {
+        editedSeason.end_date = tempEndDate.value;
+     } else {
+         editedSeason.end_date = null;
+     }
+    endDateDialog.value = false;
 }
 
 // Save season (create or update)
 async function saveSeason() {
-  if (!valid.value) return
+  const { valid: formIsValid } = await form.value.validate();
+  if (!formIsValid) {
+      console.warn("Form validation failed.");
+      return;
+  }
 
   loading.value = true
 
-  // Create a copy of the season data with properly formatted dates for API
-  const seasonData = {
-    ...editedSeason,
-    start_date: editedSeason.start_date instanceof Date
-      ? editedSeason.start_date.toISOString().split('T')[0]
-      : editedSeason.start_date,
-    end_date: editedSeason.end_date instanceof Date
-      ? editedSeason.end_date.toISOString().split('T')[0]
-      : editedSeason.end_date
+  const formatDateForAPI = (date) => {
+      if (date instanceof Date && !isNaN(date)) {
+          const year = date.getUTCFullYear();
+          const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
+          const day = date.getUTCDate().toString().padStart(2, '0');
+          return `${year}-${month}-${day}`;
+      }
+      return null;
   };
 
+  const seasonData = {
+    name: editedSeason.name,
+    description: editedSeason.description,
+    start_date: formatDateForAPI(editedSeason.start_date),
+    end_date: formatDateForAPI(editedSeason.end_date),
+    is_active: editedSeason.is_active
+  };
+
+  console.log("Attempting to save season. Payload being sent:", JSON.stringify(seasonData, null, 2));
+
   try {
-    if (isEditing.value) {
-      await axios.put(`/admin/season-pass/seasons/${editedSeason.season_id}`, seasonData)
+    if (isEditing.value && editedSeason.season_id) {
+      console.log(`Sending PUT request to /admin/season-pass/seasons/${editedSeason.season_id}`);
+      await axios.put(`/admin/season-pass/seasons/${editedSeason.season_id}`, seasonData);
     } else {
-      await axios.post('/admin/season-pass/seasons', seasonData)
+      console.log("Sending POST request to /admin/season-pass/seasons");
+      await axios.post('/admin/season-pass/seasons', seasonData);
     }
 
     await fetchSeasons()
-    dialog.value = false
+    closeDialog();
   } catch (error) {
-    console.error('Error saving season:', error)
-    alert('Failed to save season')
+     console.error('Error saving season:', error);
+     if (error.response) {
+         console.error("Backend Response Error Data:", error.response.data);
+     }
+     const errorMsg = error.response?.data?.error || error.response?.data?.message || error.message || 'Failed to save season';
+     alert(`Error: ${errorMsg}`);
   } finally {
     loading.value = false
   }
 }
 
-// Toggle active status
+// --- Activation Toggle ---
 function toggleActive(season) {
-  confirmMessage.value = season.is_active
-    ? `Are you sure you want to deactivate the "${season.name}" season?`
-    : `Are you sure you want to activate the "${season.name}" season?`
+  const seasonToUpdate = seasons.value.find(s => s.season_id === season.season_id);
+  if (!seasonToUpdate) return;
 
-  confirmAction.value = async () => {
+  confirmMessage.value = seasonToUpdate.is_active
+    ? `Are you sure you want to deactivate the "${seasonToUpdate.name}" season? This cannot be undone easily.`
+    : `Are you sure you want to activate the "${seasonToUpdate.name}" season? Any other active season will be deactivated.`;
+
+  confirmActionCallback.value = async () => {
+    confirmDialog.value = false;
+    loading.value = true;
     try {
-      await axios.put(`/admin/season-pass/seasons/${season.season_id}`, {
-        is_active: !season.is_active
-      })
-
-      await fetchSeasons()
-      confirmDialog.value = false
+      await axios.put(`/admin/season-pass/seasons/${seasonToUpdate.season_id}/toggle-active`);
+      await fetchSeasons();
     } catch (error) {
-      console.error('Error toggling season status:', error)
-      alert('Failed to update season status')
+      console.error('Error toggling season status:', error);
+       if (error.response) {
+           console.error("Backend Response Error Data:", error.response.data);
+       }
+      alert('Failed to update season status. ' + (error.response?.data?.message || ''));
+      await fetchSeasons();
+    } finally {
+      loading.value = false;
     }
+  };
+
+  confirmDialog.value = true;
+}
+
+function executeConfirmAction() {
+  if (typeof confirmActionCallback.value === 'function') {
+    confirmActionCallback.value();
   }
-
-  confirmDialog.value = true
 }
 
-// Navigate to milestones view for selected season
+// --- Navigation ---
 function viewMilestones(season) {
-  // Set the global milestone editing mode
-  // Router navigation could happen here, or passing data to parent component
-  // For now let's implement a simple approach by changing the active tab
-  localStorage.setItem('selectedSeasonId', season.season_id)
-  // Emit event to parent to change tab
-  const event = new CustomEvent('change-tab', { detail: 'milestones' })
-  window.dispatchEvent(event)
+  localStorage.setItem('selectedSeasonId', season.season_id);
+  const event = new CustomEvent('change-tab', { detail: 'milestones' });
+  window.dispatchEvent(event);
 }
 
-// Format date for display
+// --- Formatting ---
 function formatDate(dateValue) {
-  if (!dateValue) return ''
-  
-  const date = dateValue instanceof Date ? dateValue : new Date(dateValue)
-  if (isNaN(date.getTime())) return 'Invalid Date'
-  
-  return date.toLocaleDateString('en-US', {
+  console.log("formatDate received:", dateValue, typeof dateValue);
+  if (!dateValue) {
+      console.log("formatDate returning empty (falsy value)");
+      return '';
+  }
+  const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+  if (isNaN(date.getTime())) {
+    console.warn("formatDate received invalid date object after conversion:", dateValue);
+    return '';
+  }
+  const result = date.toLocaleDateString('en-GB', {
     year: 'numeric',
     month: 'short',
-    day: 'numeric'
-  })
+    day: '2-digit'
+  });
+  console.log("formatDate returning formatted:", result);
+  return result;
 }
 </script>
+
+<style scoped>
+.v-data-table {
+  margin-bottom: 1rem;
+}
+.v-dialog .v-card-text {
+    padding: 16px 24px;
+}
+.v-dialog .v-card-actions {
+    padding: 16px 24px;
+}
+</style>

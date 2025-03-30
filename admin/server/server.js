@@ -10,7 +10,7 @@ const seasonPassAdminRoutes = require('./routes/seasonPassAdminRoutes');
 
 // Create Express app
 const app = express();
-const port = process.env.PORT || 3002;
+const port = process.env.ADMIN_PORT || 3002;
 
 // Middleware
 app.use(express.json());
