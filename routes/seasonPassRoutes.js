@@ -55,6 +55,30 @@ router.get('/current', authenticateToken, async (req, res) => {
     // Calculate end time in user-friendly format
     const endDate = new Date(activeSeason.end_date);
     const daysRemaining = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
+
+    // Parse claimed_milestones if it's a string
+    let finalClaimedMilestones = []; // Default to empty array
+    if (userProgress.claimed_milestones) { // Check if it exists
+        if (typeof userProgress.claimed_milestones === 'string') {
+            try {
+                const parsed = JSON.parse(userProgress.claimed_milestones);
+                // Ensure the parsed result is actually an array
+                if (Array.isArray(parsed)) {
+                    finalClaimedMilestones = parsed;
+                } else {
+                     console.warn(`Parsed claimed_milestones for user ${userId}, season ${activeSeason.season_id} but result was not an array:`, parsed);
+                     // Keep finalClaimedMilestones as []
+                }
+            } catch (parseError) {
+                console.error(`Failed to parse claimed_milestones JSON for user ${userId}, season ${activeSeason.season_id}:`, userProgress.claimed_milestones, parseError);
+                // Keep finalClaimedMilestones as []
+            }
+        } else if (Array.isArray(userProgress.claimed_milestones)) {
+            // It's already an array (e.g., from defaults or JSON DB type)
+            finalClaimedMilestones = userProgress.claimed_milestones;
+        }
+        // If it's null or some other type, it stays []
+    }
     
     res.json({
       season: {
@@ -66,9 +90,9 @@ router.get('/current', authenticateToken, async (req, res) => {
         days_remaining: daysRemaining
       },
       user_progress: {
-        action_points: user.action_points,
+        action_points: user?.action_points || 0, // Use optional chaining and default
         has_inside_track: userProgress.has_inside_track,
-        claimed_milestones: userProgress.claimed_milestones
+        claimed_milestones: finalClaimedMilestones // <-- Send the processed array
       }
     });
   } catch (error) {
@@ -97,7 +121,8 @@ router.get('/milestones', authenticateToken, async (req, res) => {
     });
     
     if (!activeSeason) {
-      return res.status(404).json({ error: 'No active season pass found' });
+      // Return empty array if no active season, as requested by Godot script
+      return res.json({ season_id: null, milestones: [] });
     }
     
     // Get all milestones for the season
@@ -117,11 +142,30 @@ router.get('/milestones', authenticateToken, async (req, res) => {
       }
     });
     
+    // Parse claimed_milestones if it's a string
+    let claimedMilestoneNumbers = []; // Default empty array
+    if (userProgress && userProgress.claimed_milestones) {
+        if (typeof userProgress.claimed_milestones === 'string') {
+            try {
+                const parsed = JSON.parse(userProgress.claimed_milestones);
+                if (Array.isArray(parsed)) {
+                    claimedMilestoneNumbers = parsed;
+                } else {
+                     console.warn(`Parsed claimed_milestones in /milestones for user ${userId}, season ${activeSeason.season_id} but result was not an array:`, parsed);
+                }
+            } catch (e) {
+                console.error("Error parsing claimed_milestones in /milestones route:", e);
+            }
+        } else if (Array.isArray(userProgress.claimed_milestones)) {
+            claimedMilestoneNumbers = userProgress.claimed_milestones;
+        }
+    }
+
     // Format milestones with claimed status
     const formattedMilestones = milestones.map(milestone => {
-      const isClaimed = userProgress && 
-        userProgress.claimed_milestones.includes(milestone.milestone_number);
-        
+      // Use the processed claimedMilestoneNumbers array
+      const isClaimed = claimedMilestoneNumbers.includes(milestone.milestone_number);
+
       return {
         milestone_number: milestone.milestone_number,
         required_points: milestone.required_points,
@@ -133,13 +177,13 @@ router.get('/milestones', authenticateToken, async (req, res) => {
           type: milestone.paid_reward_type,
           amount: milestone.paid_reward_amount
         },
-        is_claimed: isClaimed
+        is_claimed: isClaimed // Make sure this is sent if Godot expects it
       };
     });
-    
+
     res.json({
       season_id: activeSeason.season_id,
-      milestones: formattedMilestones
+      milestones: formattedMilestones // Send the array nested in 'milestones' key
     });
   } catch (error) {
     console.error('Error fetching season milestones:', error);

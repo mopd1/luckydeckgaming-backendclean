@@ -180,6 +180,59 @@ router.delete('/seasons/:seasonId', authenticateToken, async (req, res) => {
 });
 
 /**
+ * Toggle the active status of a season
+ * This will also deactivate any other currently active season.
+ */
+router.put('/seasons/:seasonId/toggle-active', authenticateToken, async (req, res) => {
+  const transaction = await sequelize.transaction();
+  const seasonIdToActivate = req.params.seasonId;
+
+  try {
+    // Find the season to be toggled
+    const seasonToToggle = await SeasonPass.findOne({
+      where: { season_id: seasonIdToActivate },
+      transaction
+    });
+
+    if (!seasonToToggle) {
+      await transaction.rollback();
+      return res.status(404).json({ error: 'Season not found' });
+    }
+
+    const newActiveState = !seasonToToggle.is_active;
+
+    // If activating this season, deactivate all others first
+    if (newActiveState === true) {
+      await SeasonPass.update(
+        { is_active: false },
+        {
+          where: {
+            season_id: { [Op.ne]: seasonIdToActivate }, // Op.ne means "not equal"
+            is_active: true
+          },
+          transaction
+        }
+      );
+      console.log(`Deactivated other active seasons before activating ${seasonIdToActivate}`);
+    }
+
+    // Now update the target season's status
+    seasonToToggle.is_active = newActiveState;
+    await seasonToToggle.save({ transaction });
+
+    console.log(`Season ${seasonIdToActivate} active status set to ${newActiveState}`);
+
+    await transaction.commit();
+    res.json({ message: `Season ${seasonToToggle.name} status updated successfully.`, season: seasonToToggle });
+
+  } catch (error) {
+    await transaction.rollback();
+    console.error(`Error toggling active status for season ${seasonIdToActivate}:`, error);
+    res.status(500).json({ error: 'Failed to toggle season status' });
+  }
+});
+
+/**
  * Get milestones for a season
  */
 router.get('/seasons/:seasonId/milestones', authenticateToken, async (req, res) => {
