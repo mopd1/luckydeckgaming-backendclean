@@ -301,13 +301,15 @@ router.post('/claim-milestone', authenticateToken, async (req, res) => {
         rewardResult = { type: 'gems', amount: rewardAmount };
         break;
         
-      case 'pack':
+      case 'envelope_pack':
+      case 'holdall_pack':
+      case 'briefcase_pack':
         // Add pack to user's inventory
         const [inventoryItem, created] = await UserInventory.findOrCreate({
           where: {
             user_id: userId,
-            item_type: 'pack',
-            item_id: rewardAmount.toString() // Pack ID stored in amount
+            item_type: rewardType, // Use the specific pack type directly
+            item_id: `${rewardType}_${Date.now()}` // Generate a unique ID
           },
           defaults: {
             quantity: 1,
@@ -319,7 +321,7 @@ router.post('/claim-milestone', authenticateToken, async (req, res) => {
           },
           transaction
         });
-        
+    
         if (!created) {
           // Increment quantity if already exists
           await inventoryItem.increment('quantity', { 
@@ -327,10 +329,10 @@ router.post('/claim-milestone', authenticateToken, async (req, res) => {
             transaction 
           });
         }
-        
+    
         rewardResult = { 
-          type: 'pack', 
-          pack_id: rewardAmount.toString(),
+          type: rewardType, 
+          id: inventoryItem.item_id,
           quantity: 1
         };
         break;

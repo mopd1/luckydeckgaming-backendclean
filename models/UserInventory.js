@@ -1,5 +1,4 @@
-'use strict';
-
+// models/UserInventory.js
 module.exports = (sequelize, DataTypes) => {
   const UserInventory = sequelize.define('UserInventory', {
     id: {
@@ -16,11 +15,11 @@ module.exports = (sequelize, DataTypes) => {
       }
     },
     item_type: {
-      type: DataTypes.STRING(20),
+      type: DataTypes.STRING,
       allowNull: false
     },
     item_id: {
-      type: DataTypes.STRING(50),
+      type: DataTypes.STRING,
       allowNull: false
     },
     quantity: {
@@ -36,12 +35,13 @@ module.exports = (sequelize, DataTypes) => {
     tableName: 'user_inventory',
     timestamps: true,
     createdAt: 'created_at',
-    updatedAt: 'updated_at'
+    updatedAt: 'updated_at',
   });
 
-  UserInventory.associate = function(models) {
+  UserInventory.associate = (models) => {
     UserInventory.belongsTo(models.User, {
-      foreignKey: 'user_id'
+      foreignKey: 'user_id',
+      as: 'user'
     });
   };
 
