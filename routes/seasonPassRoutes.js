@@ -11,6 +11,8 @@ const {
 } = require('../models');
 const { Op } = require('sequelize');
 
+console.log("!!! --- Loading seasonPassRoutes.js --- !!!");
+
 /**
  * Get the current active season pass with user progress
  */
@@ -305,34 +307,27 @@ router.post('/claim-milestone', authenticateToken, async (req, res) => {
       case 'holdall_pack':
       case 'briefcase_pack':
         // Add pack to user's inventory
-        const [inventoryItem, created] = await UserInventory.findOrCreate({
-          where: {
+        // Always create a new row for each pack instance
+        // The auto-incrementing 'id' will be its unique identifier
+        await UserInventory.create({
             user_id: userId,
-            item_type: rewardType, // Use the specific pack type directly
-            item_id: `${rewardType}_${Date.now()}` // Generate a unique ID
-          },
-          defaults: {
-            quantity: 1,
-            metadata: { 
+            item_type: 'pack', // Use a generic type 'pack'
+            item_id: rewardType, // Store the specific type (e.g., 'envelope_pack') here
+            quantity: 1, // Always quantity 1 for a unique instance
+            metadata: {
               source: 'season_pass',
               milestone: milestone_number,
               season_id: activeSeason.season_id
+              // Add any other useful info like pack name if needed
             }
           },
-          transaction
-        });
-    
-        if (!created) {
-          // Increment quantity if already exists
-          await inventoryItem.increment('quantity', { 
-            by: 1, 
-            transaction 
-          });
-        }
-    
-        rewardResult = { 
-          type: rewardType, 
-          id: inventoryItem.item_id,
+          { transaction } // Pass the transaction object
+        );
+
+        // The rewardResult can maybe just indicate the type granted
+        // The client won't know the instance ID until the next inventory fetch
+        rewardResult = {
+          type: rewardType, // Still useful to know what kind was granted
           quantity: 1
         };
         break;
@@ -485,136 +480,208 @@ router.post('/purchase-inside-track', authenticateToken, async (req, res) => {
 });
 
 /**
- * Get user's inventory
+ * Get user's inventory (Modified for Unique Instances)
  */
 router.get('/inventory', authenticateToken, async (req, res) => {
+  console.log("!!! --- Executing NEW GET /inventory handler --- !!!");
   try {
     const userId = req.user.id;
-    
-    const inventory = await UserInventory.findAll({
+    console.log(`!!! --- Fetching inventory for user: ${userId} --- !!!`);
+
+    const inventoryItems = await UserInventory.findAll({
       where: { user_id: userId },
-      attributes: ['item_type', 'item_id', 'quantity', 'metadata']
+      attributes: ['id', 'item_type', 'item_id', 'quantity', 'metadata', 'created_at']
     });
-    
-    // Group by item type for easier client handling
-    const groupedInventory = inventory.reduce((acc, item) => {
-      if (!acc[item.item_type]) {
-        acc[item.item_type] = [];
-      }
-      
-      acc[item.item_type].push({
-        id: item.item_id,
-        quantity: item.quantity,
-        metadata: item.metadata
-      });
-      
-      return acc;
-    }, {});
-    
-    res.json(groupedInventory);
+    console.log(`!!! --- Found ${inventoryItems.length} raw items --- !!!`);
+
+// Prepare the flat array response
+const responseInventory = inventoryItems.map(item => {
+  // --- START REVISED CHECK ---
+  // Check if it's a NEW format pack OR an OLD format pack type
+  const isPack = item.item_type === 'pack' || // Check for new format
+                 item.item_type === 'envelope_pack' || // Check for old formats
+                 item.item_type === 'holdall_pack' ||
+                 item.item_type === 'briefcase_pack';
+
+  if (isPack) {
+    // It's a pack (either new or old format)
+
+    // Determine the actual pack type ID.
+    // If it's new format ('pack'), the type is in item_id.
+    // If it's old format ('envelope_pack'), the type is in item_type.
+    const packTypeId = (item.item_type === 'pack') ? item.item_id : item.item_type;
+
+    return {
+      instance_id: item.id,         // USE THE DATABASE ROW ID (e.g., 9)
+      item_type: 'pack',            // Standardize output type to 'pack'
+      pack_type_id: packTypeId,     // Output the specific type ('envelope_pack')
+      quantity: item.quantity,      // Should be 1
+      metadata: item.metadata,      // Pass metadata through
+      created_at: item.created_at   // Pass timestamp through
+    };
+  } else {
+    // Format OTHER item types (non-packs)
+    return {
+      id: item.item_id,           // Assuming non-packs use item_id as identifier
+      item_type: item.item_type,
+      quantity: item.quantity,
+      metadata: item.metadata
+    };
+  }
+  // --- END REVISED CHECK ---
+}); // End of .map()
+
+console.log(`!!! --- Mapped inventory (REVISED CHECK): ${JSON.stringify(responseInventory)} --- !!!`); // Verify the final array
+
+res.json(responseInventory); // Send the correctly mapped array
+
   } catch (error) {
-    console.error('Error fetching inventory:', error);
+    console.error('!!! --- ERROR in NEW GET /inventory handler: --- !!!');
+    console.error("Error Stack:", error.stack);
+    console.error('Original Error Object:', error);
     res.status(500).json({ error: 'Failed to fetch inventory' });
   }
 });
 
 /**
- * Use an item from inventory (like opening a pack)
+ * Open a specific pack instance
  */
-router.post('/inventory/use', authenticateToken, async (req, res) => {
-  const transaction = await sequelize.transaction();
-  
+router.post('/inventory/packs/:instanceId/open', authenticateToken, async (req, res) => {
+  const transaction = await sequelize.transaction(); // Start transaction
+
   try {
     const userId = req.user.id;
-    const { item_type, item_id } = req.body;
-    
-    if (!item_type || !item_id) {
+    const instanceId = parseInt(req.params.instanceId, 10); // Get ID from URL param
+
+    if (isNaN(instanceId)) {
       await transaction.rollback();
-      return res.status(400).json({ error: 'Item type and ID are required' });
+      return res.status(400).json({ error: 'Invalid pack instance ID format.' });
     }
-    
-    // Check if item exists in inventory
-    const inventoryItem = await UserInventory.findOne({
+
+    // 1. Find the specific pack instance row using PRIMARY KEY 'id'
+    const packInstance = await UserInventory.findOne({
       where: {
+        id: instanceId,       // Use the primary key 'id'
         user_id: userId,
-        item_type,
-        item_id
+        item_type: 'pack'     // Ensure it's a pack item
+        // quantity: { [Op.gt]: 0 } // Optional: Ensure quantity is positive (should be 1)
       },
       transaction
     });
-    
-    if (!inventoryItem || inventoryItem.quantity <= 0) {
+
+    // 2. Check if the pack exists and belongs to the user
+    if (!packInstance) {
       await transaction.rollback();
-      return res.status(404).json({ error: 'Item not found in inventory or quantity is 0' });
+      // 404 Not Found implies it doesn't exist or was already opened
+      return res.status(404).json({ error: 'Pack instance not found or already opened.' });
     }
-    
-    // Process different item types
-    let result = {};
-    
-    if (item_type === 'pack') {
-      // Handle pack opening
-      // This is where you would determine what's in the pack and add it to user's ownership
-      
-      // For now, let's simulate giving random avatar parts
-      const user = await User.findByPk(userId, { transaction });
-      
-      // Convert to array if it's a string
-      let parts = user.owned_avatar_parts;
-      if (typeof parts === 'string') {
-        try { parts = JSON.parse(parts); } 
-        catch (e) { parts = []; }
-      }
-      
-      if (!Array.isArray(parts)) {
-        parts = [];
-      }
-      
-      // Simulate adding 3 random avatar parts (IDs 1-20)
-      const newParts = [];
-      for (let i = 0; i < 3; i++) {
-        const partId = Math.floor(Math.random() * 20) + 1;
-        if (!parts.includes(partId.toString())) {
-          parts.push(partId.toString());
-          newParts.push(partId);
+
+    // 3. Get pack type to determine rewards
+    const packTypeId = packInstance.item_id; // e.g., 'envelope_pack'
+
+    // 4. Delete the pack instance row FIRST
+    await packInstance.destroy({ transaction }); // Or UserInventory.destroy(...)
+
+    // 5. Generate and grant rewards based on packTypeId
+    const user = await User.findByPk(userId, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!user) {
+        // Should not happen if token is valid, but safety check
+        await transaction.rollback();
+        return res.status(404).json({ error: 'User not found during reward granting.' });
+    }
+
+    let grantedRewards = { items: [], currency: {} }; // Structure to hold rewards
+
+    // --- REWARD GENERATION LOGIC ---
+    // Replace this switch with your actual, potentially more complex, reward logic
+    // This logic should ideally live in a separate utility function for cleanliness
+    switch (packTypeId) {
+      case 'envelope_pack':
+        const chipsEnvelope = 1000 + Math.floor(Math.random() * 5000);
+        await user.increment('balance', { by: chipsEnvelope, transaction });
+        grantedRewards.currency['chips'] = (grantedRewards.currency['chips'] || 0) + chipsEnvelope;
+
+        if (Math.random() < 0.3) { // 30% chance for gems
+          const gemsEnvelope = 5 + Math.floor(Math.random() * 20);
+          await user.increment('gems', { by: gemsEnvelope, transaction });
+          grantedRewards.currency['gems'] = (grantedRewards.currency['gems'] || 0) + gemsEnvelope;
         }
-      }
-      
-      user.owned_avatar_parts = parts;
-      await user.save({ transaction });
-      
-      result = {
-        pack_id: item_id,
-        awarded_parts: newParts
-      };
-    } else {
-      await transaction.rollback();
-      return res.status(400).json({ error: 'Unsupported item type: ' + item_type });
+        break;
+
+      case 'holdall_pack':
+        const chipsHoldall = 5000 + Math.floor(Math.random() * 15000);
+        await user.increment('balance', { by: chipsHoldall, transaction });
+        grantedRewards.currency['chips'] = (grantedRewards.currency['chips'] || 0) + chipsHoldall;
+
+        const gemsHoldall = 20 + Math.floor(Math.random() * 50);
+        await user.increment('gems', { by: gemsHoldall, transaction });
+        grantedRewards.currency['gems'] = (grantedRewards.currency['gems'] || 0) + gemsHoldall;
+
+        if (Math.random() < 0.5) { // 50% chance for avatar part
+            const partIdHoldall = (Math.floor(Math.random() * 20) + 1).toString(); // Example part ID
+            // Add to owned_avatar_parts (handle JSON parsing/adding carefully)
+            let ownedPartsHoldall = user.owned_avatar_parts || [];
+            if (typeof ownedPartsHoldall === 'string') { try { ownedPartsHoldall = JSON.parse(ownedPartsHoldall); } catch(e){ ownedPartsHoldall = []; } }
+            if (!Array.isArray(ownedPartsHoldall)) ownedPartsHoldall = [];
+            if (!ownedPartsHoldall.includes(partIdHoldall)) {
+                ownedPartsHoldall.push(partIdHoldall);
+                user.owned_avatar_parts = ownedPartsHoldall; // Assign back (Sequelize handles JSON stringify on save)
+                grantedRewards.items.push({ item_type: 'avatar_part', item_id: partIdHoldall, quantity: 1 });
+            }
+        }
+        break;
+
+      case 'briefcase_pack':
+        const chipsBriefcase = 20000 + Math.floor(Math.random() * 50000);
+        await user.increment('balance', { by: chipsBriefcase, transaction });
+        grantedRewards.currency['chips'] = (grantedRewards.currency['chips'] || 0) + chipsBriefcase;
+
+        const gemsBriefcase = 50 + Math.floor(Math.random() * 150);
+        await user.increment('gems', { by: gemsBriefcase, transaction });
+        grantedRewards.currency['gems'] = (grantedRewards.currency['gems'] || 0) + gemsBriefcase;
+
+        const partIdBriefcase = (Math.floor(Math.random() * 20) + 1).toString(); // Example part ID
+         // Add to owned_avatar_parts
+         let ownedPartsBriefcase = user.owned_avatar_parts || [];
+         if (typeof ownedPartsBriefcase === 'string') { try { ownedPartsBriefcase = JSON.parse(ownedPartsBriefcase); } catch(e){ ownedPartsBriefcase = []; } }
+         if (!Array.isArray(ownedPartsBriefcase)) ownedPartsBriefcase = [];
+         if (!ownedPartsBriefcase.includes(partIdBriefcase)) {
+             ownedPartsBriefcase.push(partIdBriefcase);
+             user.owned_avatar_parts = ownedPartsBriefcase;
+             grantedRewards.items.push({ item_type: 'avatar_part', item_id: partIdBriefcase, quantity: 1 });
+         }
+        break;
+
+      default:
+        console.warn(`Unknown pack type ID encountered: ${packTypeId} for instance ${instanceId}`);
+        // Decide if this is an error or just grants nothing
+        // await transaction.rollback(); // Optionally rollback if type is unknown
+        // return res.status(400).json({ error: `Unknown pack type: ${packTypeId}` });
     }
-    
-    // Decrement item quantity
-    await inventoryItem.decrement('quantity', { by: 1, transaction });
-    
-    // If quantity reaches 0, delete the item
-    if (inventoryItem.quantity <= 1) {
-      await inventoryItem.destroy({ transaction });
-    }
-    
-    // Commit transaction
+    // --- END REWARD GENERATION LOGIC ---
+
+    // Save user changes (balance, gems, owned_parts)
+    await user.save({ transaction });
+
+    // 6. Commit transaction
     await transaction.commit();
-    
+
+    // 7. Send success response with granted rewards
     res.json({
       success: true,
-      item_used: {
-        type: item_type,
-        id: item_id
-      },
-      result
+      message: `Successfully opened ${packTypeId}.`,
+      opened_pack_instance_id: instanceId,
+      rewards: grantedRewards // Send the calculated rewards back to the client
     });
+
   } catch (error) {
+    // Rollback transaction in case of any error
     await transaction.rollback();
-    console.error('Error using inventory item:', error);
-    res.status(500).json({ error: 'Failed to use inventory item' });
+    console.error(`Error opening pack instance ${req.params.instanceId}:`, error);
+    res.status(500).json({ error: 'Failed to open pack.' });
   }
 });
+
+console.log("!!! --- Finished loading seasonPassRoutes.js --- !!!");
 
 module.exports = router;

@@ -155,6 +155,7 @@ app.use('/api/store-transactions', storeTransactionRoutes);
 app.use('/api/balance', require('./routes/balanceRoutes'));
 app.use('/api/daily-tasks', dailyTaskRoutes);
 app.use('/api/player-grading', playerGradingRoutes);
+console.log("!!! --- Mounting /api/season-pass with router: --- !!!", typeof seasonPassRoutes);
 app.use('/api/season-pass', seasonPassRoutes);
 
 // Default routes without rate limiting
