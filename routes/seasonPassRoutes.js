@@ -10,8 +10,29 @@ const {
   sequelize
 } = require('../models');
 const { Op } = require('sequelize');
+const fs = require('fs');
+const path = require('path');
 
 console.log("!!! --- Loading seasonPassRoutes.js --- !!!");
+
+let availableAvatarParts = [];
+try {
+    // Construct the correct path relative to the routes file
+    const avatarPartsDataPath = path.join(__dirname, '../data/avatar_parts_store.json');
+    console.log(`Attempting to load avatar parts from: ${avatarPartsDataPath}`);
+    const partsJson = fs.readFileSync(avatarPartsDataPath, 'utf8');
+    const partsData = JSON.parse(partsJson);
+    if (partsData && Array.isArray(partsData.parts)) {
+        availableAvatarParts = partsData.parts;
+        console.log(`Successfully loaded ${availableAvatarParts.length} avatar parts for reward generation.`);
+    } else {
+        console.error('Invalid format in avatar_parts_store.json. Expected { "parts": [...] }');
+    }
+} catch (err) {
+    console.error('!!! CRITICAL ERROR: Failed to load avatar_parts_store.json !!!', err);
+    // Decide how to handle this - maybe disable pack opening or throw?
+    // For now, availableAvatarParts will remain empty, preventing avatar rewards.
+}
 
 /**
  * Get the current active season pass with user progress
@@ -548,136 +569,133 @@ res.json(responseInventory); // Send the correctly mapped array
  */
 router.post('/inventory/packs/:instanceId/open', authenticateToken, async (req, res) => {
   const transaction = await sequelize.transaction(); // Start transaction
+  const userId = req.user.id;
+  const instanceIdParam = req.params.instanceId;
+  const instanceId = parseInt(instanceIdParam, 10);
+
+  // --- Logging from previous step ---
+  console.log(`--- Attempting to Open Pack ---`);
+  console.log(`Timestamp: ${new Date().toISOString()}`);
+  console.log(`Request URL: ${req.originalUrl}`);
+  console.log(`Authenticated User ID: ${userId}`);
+  console.log(`Parsed Instance ID: ${instanceId}`);
+  // --- End Logging ---
 
   try {
-    const userId = req.user.id;
-    const instanceId = parseInt(req.params.instanceId, 10); // Get ID from URL param
-
     if (isNaN(instanceId)) {
+      console.error('Invalid pack instance ID format.');
       await transaction.rollback();
       return res.status(400).json({ error: 'Invalid pack instance ID format.' });
     }
 
-    // 1. Find the specific pack instance row using PRIMARY KEY 'id'
+    // 1. Find the specific pack instance row
     const packInstance = await UserInventory.findOne({
-      where: {
-        id: instanceId,       // Use the primary key 'id'
-        user_id: userId,
-        item_type: 'pack'     // Ensure it's a pack item
-        // quantity: { [Op.gt]: 0 } // Optional: Ensure quantity is positive (should be 1)
-      },
+      where: { id: instanceId, user_id: userId, item_type: 'pack' },
       transaction
     });
 
-    // 2. Check if the pack exists and belongs to the user
+    // 2. Check if the pack exists
     if (!packInstance) {
+      console.error(`Pack instance NOT FOUND with query: { id: ${instanceId}, user_id: ${userId}, item_type: 'pack' }`);
+       // --- Debug Check (Optional) ---
+      const checkWithoutType = await UserInventory.findOne({ where: { id: instanceId, user_id: userId }, transaction });
+      if (checkWithoutType) { console.log(`DEBUG: Found item id=${instanceId}, user_id=${userId} but item_type is '${checkWithoutType.item_type}'`); }
+      else { console.log(`DEBUG: Still couldn't find item id=${instanceId}, user_id=${userId}`); }
+      // --- End Debug Check ---
       await transaction.rollback();
-      // 404 Not Found implies it doesn't exist or was already opened
       return res.status(404).json({ error: 'Pack instance not found or already opened.' });
     }
+    console.log(`Pack instance FOUND: ${packInstance.id}`);
 
-    // 3. Get pack type to determine rewards
-    const packTypeId = packInstance.item_id; // e.g., 'envelope_pack'
+    // 3. Get pack type ID (might be used later for different pack types)
+    const packTypeId = packInstance.item_id;
+    console.log(`Pack Type ID: ${packTypeId}`);
 
     // 4. Delete the pack instance row FIRST
-    await packInstance.destroy({ transaction }); // Or UserInventory.destroy(...)
+    await packInstance.destroy({ transaction });
+    console.log(`Pack instance id: ${instanceId} destroyed.`);
 
-    // 5. Generate and grant rewards based on packTypeId
+    // 5. Generate and grant rewards (NOW AVATAR PARTS)
     const user = await User.findByPk(userId, { transaction, lock: transaction.LOCK.UPDATE });
     if (!user) {
-        // Should not happen if token is valid, but safety check
+        console.error('User not found during reward granting.');
         await transaction.rollback();
         return res.status(404).json({ error: 'User not found during reward granting.' });
     }
 
-    let grantedRewards = { items: [], currency: {} }; // Structure to hold rewards
+    let grantedRewards = { items: [], currency: {} }; // Initialize rewards structure
 
     // --- REWARD GENERATION LOGIC ---
-    // Replace this switch with your actual, potentially more complex, reward logic
-    // This logic should ideally live in a separate utility function for cleanliness
-    switch (packTypeId) {
-      case 'envelope_pack':
-        const chipsEnvelope = 1000 + Math.floor(Math.random() * 5000);
-        await user.increment('balance', { by: chipsEnvelope, transaction });
-        grantedRewards.currency['chips'] = (grantedRewards.currency['chips'] || 0) + chipsEnvelope;
+    if (availableAvatarParts.length === 0) {
+        console.error(`Cannot grant avatar part reward: availableAvatarParts list is empty or failed to load.`);
+        // Decide what to do: grant nothing, grant fallback currency, or error out?
+        // For now, grant nothing from this pack type if parts aren't loaded.
+    } else {
+        // Select a random part
+        const randomIndex = Math.floor(Math.random() * availableAvatarParts.length);
+        const chosenPart = availableAvatarParts[randomIndex];
+        console.log(`Chosen reward part: ${chosenPart.id} (${chosenPart.display_name})`);
 
-        if (Math.random() < 0.3) { // 30% chance for gems
-          const gemsEnvelope = 5 + Math.floor(Math.random() * 20);
-          await user.increment('gems', { by: gemsEnvelope, transaction });
-          grantedRewards.currency['gems'] = (grantedRewards.currency['gems'] || 0) + gemsEnvelope;
+        // Add the part ID to the user's owned list
+        let ownedParts = user.owned_avatar_parts || [];
+        if (typeof ownedParts === 'string') {
+            try { ownedParts = JSON.parse(ownedParts); } catch(e){ console.error(`Error parsing owned_avatar_parts for user ${userId}:`, e); ownedParts = []; }
         }
-        break;
-
-      case 'holdall_pack':
-        const chipsHoldall = 5000 + Math.floor(Math.random() * 15000);
-        await user.increment('balance', { by: chipsHoldall, transaction });
-        grantedRewards.currency['chips'] = (grantedRewards.currency['chips'] || 0) + chipsHoldall;
-
-        const gemsHoldall = 20 + Math.floor(Math.random() * 50);
-        await user.increment('gems', { by: gemsHoldall, transaction });
-        grantedRewards.currency['gems'] = (grantedRewards.currency['gems'] || 0) + gemsHoldall;
-
-        if (Math.random() < 0.5) { // 50% chance for avatar part
-            const partIdHoldall = (Math.floor(Math.random() * 20) + 1).toString(); // Example part ID
-            // Add to owned_avatar_parts (handle JSON parsing/adding carefully)
-            let ownedPartsHoldall = user.owned_avatar_parts || [];
-            if (typeof ownedPartsHoldall === 'string') { try { ownedPartsHoldall = JSON.parse(ownedPartsHoldall); } catch(e){ ownedPartsHoldall = []; } }
-            if (!Array.isArray(ownedPartsHoldall)) ownedPartsHoldall = [];
-            if (!ownedPartsHoldall.includes(partIdHoldall)) {
-                ownedPartsHoldall.push(partIdHoldall);
-                user.owned_avatar_parts = ownedPartsHoldall; // Assign back (Sequelize handles JSON stringify on save)
-                grantedRewards.items.push({ item_type: 'avatar_part', item_id: partIdHoldall, quantity: 1 });
-            }
-        }
-        break;
-
-      case 'briefcase_pack':
-        const chipsBriefcase = 20000 + Math.floor(Math.random() * 50000);
-        await user.increment('balance', { by: chipsBriefcase, transaction });
-        grantedRewards.currency['chips'] = (grantedRewards.currency['chips'] || 0) + chipsBriefcase;
-
-        const gemsBriefcase = 50 + Math.floor(Math.random() * 150);
-        await user.increment('gems', { by: gemsBriefcase, transaction });
-        grantedRewards.currency['gems'] = (grantedRewards.currency['gems'] || 0) + gemsBriefcase;
-
-        const partIdBriefcase = (Math.floor(Math.random() * 20) + 1).toString(); // Example part ID
-         // Add to owned_avatar_parts
-         let ownedPartsBriefcase = user.owned_avatar_parts || [];
-         if (typeof ownedPartsBriefcase === 'string') { try { ownedPartsBriefcase = JSON.parse(ownedPartsBriefcase); } catch(e){ ownedPartsBriefcase = []; } }
-         if (!Array.isArray(ownedPartsBriefcase)) ownedPartsBriefcase = [];
-         if (!ownedPartsBriefcase.includes(partIdBriefcase)) {
-             ownedPartsBriefcase.push(partIdBriefcase);
-             user.owned_avatar_parts = ownedPartsBriefcase;
-             grantedRewards.items.push({ item_type: 'avatar_part', item_id: partIdBriefcase, quantity: 1 });
+        if (!Array.isArray(ownedParts)) {
+            console.warn(`User ${userId} owned_avatar_parts was not an array or valid JSON string. Resetting to empty array.`);
+            ownedParts = [];
          }
-        break;
 
-      default:
-        console.warn(`Unknown pack type ID encountered: ${packTypeId} for instance ${instanceId}`);
-        // Decide if this is an error or just grants nothing
-        // await transaction.rollback(); // Optionally rollback if type is unknown
-        // return res.status(400).json({ error: `Unknown pack type: ${packTypeId}` });
+        const partIdToAdd = chosenPart.id;
+        if (!ownedParts.includes(partIdToAdd)) {
+            ownedParts.push(partIdToAdd);
+            user.owned_avatar_parts = ownedParts; // Assign back - Sequelize handles JSON stringification
+            console.log(`Added part ${partIdToAdd} to user ${userId}. New owned_parts count: ${ownedParts.length}`);
+        } else {
+             console.log(`User ${userId} already owns part ${partIdToAdd}. Still including in reward display.`);
+        }
+
+        // Add the *full* necessary part data to the reward response for the client's ItemCard
+        grantedRewards.items.push({
+            id: chosenPart.id,                  // ID of the part itself
+            item_type: 'avatar_part',           // Generic type for client filtering?
+            display_name: chosenPart.display_name,
+            type: chosenPart.type,              // Specific avatar part type (e.g., 'face')
+            rarity: chosenPart.rarity,
+            image: chosenPart.image,            // Path for the client to load
+            rarity_stars: chosenPart.rarity_stars,
+            trade_value: chosenPart.trade_value,
+            flavour_text: chosenPart.flavour_text
+        });
     }
     // --- END REWARD GENERATION LOGIC ---
 
-    // Save user changes (balance, gems, owned_parts)
+    // Save user changes (only owned_avatar_parts modified here)
     await user.save({ transaction });
+    console.log(`User ${userId} data saved.`);
 
     // 6. Commit transaction
     await transaction.commit();
+    console.log(`Transaction committed successfully for pack id: ${instanceId}`);
 
     // 7. Send success response with granted rewards
+    console.log(`Sending success response with rewards: ${JSON.stringify(grantedRewards)}`);
     res.json({
       success: true,
       message: `Successfully opened ${packTypeId}.`,
       opened_pack_instance_id: instanceId,
+      pack_type_id: packTypeId,
       rewards: grantedRewards // Send the calculated rewards back to the client
     });
 
   } catch (error) {
-    // Rollback transaction in case of any error
-    await transaction.rollback();
-    console.error(`Error opening pack instance ${req.params.instanceId}:`, error);
+    console.error(`Error opening pack instance ${instanceIdParam}:`, error);
+    try {
+        await transaction.rollback();
+        console.log(`Transaction rolled back due to error for pack id: ${instanceId}`);
+    } catch (rollbackError) {
+        console.error('Error rolling back transaction:', rollbackError);
+    }
     res.status(500).json({ error: 'Failed to open pack.' });
   }
 });
