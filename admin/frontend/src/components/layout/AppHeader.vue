@@ -40,6 +40,11 @@
         :to="{ name: 'Economy' }"
       ></v-list-item>
       <v-list-item
+        title="Packages"
+        prepend-icon="mdi-package-variant-closed"
+        :to="{ name: 'Packages' }"
+      ></v-list-item>
+      <v-list-item
         v-if="hasPermission('view_users')"
         title="Users"
         prepend-icon="mdi-account-group"

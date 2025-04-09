@@ -38,7 +38,7 @@
       
       <!-- Chips Column -->
       <template v-slot:item.chips="{ item }">
-        {{ item.chips.toLocaleString() }}
+        {{ formatNumber(item.chips) }}
       </template>
       
       <!-- Actions Column -->
@@ -146,182 +146,195 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+    
+    <!-- Snackbar for notifications -->
+    <v-snackbar
+      v-model="snackbar.show"
+      :color="snackbar.color"
+      :timeout="snackbar.timeout"
+    >
+      {{ snackbar.text }}
+      <template v-slot:actions>
+        <v-btn
+          color="white"
+          text
+          @click="snackbar.show = false"
+        >
+          Close
+        </v-btn>
+      </template>
+    </v-snackbar>
   </div>
 </template>
 
-<script setup>
-import { ref, reactive, onMounted } from 'vue'
-import api from '../../services/api'
-import { useSnackbar } from '../../stores/snackbar'
+<script>
+import api from '@/services/api';
 
-const snackbar = useSnackbar()
-
-// Data
-const packages = ref([])
-const loading = ref(true)
-const dialog = ref(false)
-const deleteDialog = ref(false)
-const editMode = ref(false)
-const editedItem = reactive({
-  id: null,
-  active: true,
-  price: 0,
-  chips: 0,
-  gems: 0,
-  display_order: 0
-})
-const defaultItem = {
-  active: true,
-  price: 0,
-  chips: 0,
-  gems: 0,
-  display_order: 0
-}
-const packageToDelete = ref(null)
-
-// Table headers
-const headers = [
-  { title: 'ID', key: 'id', sortable: true, width: '80px' },
-  { title: 'Active', key: 'active', sortable: true, width: '100px' },
-  { title: 'Price', key: 'price', sortable: true },
-  { title: 'Chips', key: 'chips', sortable: true },
-  { title: 'Gems', key: 'gems', sortable: true },
-  { title: 'Display Order', key: 'display_order', sortable: true },
-  { title: 'Actions', key: 'actions', sortable: false, width: '120px' }
-]
-
-// Load packages
-const fetchPackages = async () => {
-  loading.value = true
-  try {
-    const response = await api.get('/packages/admin/all')
-    packages.value = response.data.packages
-  } catch (error) {
-    console.error('Error fetching packages:', error)
-    snackbar.show({
-      text: 'Failed to load packages',
-      color: 'error'
-    })
-  } finally {
-    loading.value = false
-  }
-}
-
-// Open dialog for new/edit
-const openPackageDialog = (item = null) => {
-  if (item) {
-    // Edit mode
-    editMode.value = true
-    Object.assign(editedItem, item)
-  } else {
-    // Add mode
-    editMode.value = false
-    Object.assign(editedItem, defaultItem)
-  }
-  dialog.value = true
-}
-
-// Close dialog
-const closeDialog = () => {
-  dialog.value = false
-  // Wait for dialog to close before resetting form
-  setTimeout(() => {
-    Object.assign(editedItem, defaultItem)
-  }, 300)
-}
-
-// Save package
-const savePackage = async () => {
-  try {
-    if (editMode.value) {
-      // Update existing package
-      await api.put(`/packages/admin/${editedItem.id}`, {
-        active: editedItem.active,
-        price: editedItem.price,
-        chips: editedItem.chips,
-        gems: editedItem.gems,
-        display_order: editedItem.display_order
-      })
-      snackbar.show({
-        text: 'Package updated successfully',
-        color: 'success'
-      })
-    } else {
-      // Create new package
-      await api.post('/packages/admin', {
-        active: editedItem.active,
-        price: editedItem.price,
-        chips: editedItem.chips,
-        gems: editedItem.gems,
-        display_order: editedItem.display_order
-      })
-      snackbar.show({
-        text: 'Package created successfully',
-        color: 'success'
-      })
-    }
+export default {
+  name: 'PackageList',
+  data() {
+    return {
+      packages: [],
+      loading: true,
+      dialog: false,
+      deleteDialog: false,
+      editMode: false,
+      editedItem: {
+        id: null,
+        active: true,
+        price: 0,
+        chips: 0,
+        gems: 0,
+        display_order: 0
+      },
+      defaultItem: {
+        active: true,
+        price: 0,
+        chips: 0,
+        gems: 0,
+        display_order: 0
+      },
+      packageToDelete: null,
+      headers: [
+        { title: 'ID', key: 'id', sortable: true, width: '80px' },
+        { title: 'Active', key: 'active', sortable: true, width: '100px' },
+        { title: 'Price', key: 'price', sortable: true },
+        { title: 'Chips', key: 'chips', sortable: true },
+        { title: 'Gems', key: 'gems', sortable: true },
+        { title: 'Display Order', key: 'display_order', sortable: true },
+        { title: 'Actions', key: 'actions', sortable: false, width: '120px' }
+      ],
+      snackbar: {
+        show: false,
+        text: '',
+        color: 'success',
+        timeout: 3000
+      }
+    };
+  },
+  
+  mounted() {
+    this.fetchPackages();
+  },
+  
+  methods: {
+    // Show notification
+    showMessage(text, color = 'success') {
+      this.snackbar.text = text;
+      this.snackbar.color = color;
+      this.snackbar.show = true;
+    },
     
-    // Close dialog and refresh data
-    closeDialog()
-    fetchPackages()
-  } catch (error) {
-    console.error('Error saving package:', error)
-    snackbar.show({
-      text: 'Failed to save package',
-      color: 'error'
-    })
+    // Load packages
+    async fetchPackages() {
+      this.loading = true;
+      try {
+        const response = await api.get('/packages/admin/all');
+        this.packages = response.data.packages;
+      } catch (error) {
+        console.error('Error fetching packages:', error);
+        this.showMessage('Failed to load packages', 'error');
+      } finally {
+        this.loading = false;
+      }
+    },
+    
+    // Open dialog for new/edit
+    openPackageDialog(item = null) {
+      if (item) {
+        // Edit mode
+        this.editMode = true;
+        this.editedItem = Object.assign({}, item);
+      } else {
+        // Add mode
+        this.editMode = false;
+        this.editedItem = Object.assign({}, this.defaultItem);
+      }
+      this.dialog = true;
+    },
+    
+    // Close dialog
+    closeDialog() {
+      this.dialog = false;
+      // Wait for dialog to close before resetting form
+      setTimeout(() => {
+        this.editedItem = Object.assign({}, this.defaultItem);
+      }, 300);
+    },
+    
+    // Save package
+    async savePackage() {
+      try {
+        if (this.editMode) {
+          // Update existing package
+          await api.put(`/packages/admin/${this.editedItem.id}`, {
+            active: this.editedItem.active,
+            price: this.editedItem.price,
+            chips: this.editedItem.chips,
+            gems: this.editedItem.gems,
+            display_order: this.editedItem.display_order
+          });
+          this.showMessage('Package updated successfully');
+        } else {
+          // Create new package
+          await api.post('/packages/admin', {
+            active: this.editedItem.active,
+            price: this.editedItem.price,
+            chips: this.editedItem.chips,
+            gems: this.editedItem.gems,
+            display_order: this.editedItem.display_order
+          });
+          this.showMessage('Package created successfully');
+        }
+        
+        // Close dialog and refresh data
+        this.closeDialog();
+        this.fetchPackages();
+      } catch (error) {
+        console.error('Error saving package:', error);
+        this.showMessage('Failed to save package', 'error');
+      }
+    },
+    
+    // Toggle package active status
+    async togglePackageStatus(item) {
+      try {
+        await api.put(`/packages/admin/${item.id}`, {
+          active: item.active
+        });
+        this.showMessage(`Package ${item.active ? 'activated' : 'deactivated'}`);
+        this.fetchPackages();
+      } catch (error) {
+        console.error('Error updating package status:', error);
+        // Revert UI change
+        item.active = !item.active;
+        this.showMessage('Failed to update package status', 'error');
+      }
+    },
+    
+    // Confirm package deletion
+    confirmDeletePackage(item) {
+      this.packageToDelete = item;
+      this.deleteDialog = true;
+    },
+    
+    // Delete package
+    async deletePackage() {
+      try {
+        await api.delete(`/packages/admin/${this.packageToDelete.id}`);
+        this.deleteDialog = false;
+        this.showMessage('Package deleted successfully');
+        this.fetchPackages();
+      } catch (error) {
+        console.error('Error deleting package:', error);
+        this.showMessage('Failed to delete package', 'error');
+      }
+    },
+    
+    // Format number with commas
+    formatNumber(num) {
+      return new Intl.NumberFormat().format(num || 0);
+    }
   }
-}
-
-// Toggle package active status
-const togglePackageStatus = async (item) => {
-  try {
-    await api.put(`/packages/admin/${item.id}`, {
-      active: item.active
-    })
-    snackbar.show({
-      text: `Package ${item.active ? 'activated' : 'deactivated'}`,
-      color: 'success'
-    })
-    fetchPackages()
-  } catch (error) {
-    console.error('Error updating package status:', error)
-    // Revert UI change
-    item.active = !item.active
-    snackbar.show({
-      text: 'Failed to update package status',
-      color: 'error'
-    })
-  }
-}
-
-// Confirm package deletion
-const confirmDeletePackage = (item) => {
-  packageToDelete.value = item
-  deleteDialog.value = true
-}
-
-// Delete package
-const deletePackage = async () => {
-  try {
-    await api.delete(`/packages/admin/${packageToDelete.value.id}`)
-    deleteDialog.value = false
-    snackbar.show({
-      text: 'Package deleted successfully',
-      color: 'success'
-    })
-    fetchPackages()
-  } catch (error) {
-    console.error('Error deleting package:', error)
-    snackbar.show({
-      text: 'Failed to delete package',
-      color: 'error'
-    })
-  }
-}
-
-// Initialize
-onMounted(() => {
-  fetchPackages()
-})
+};
 </script>
