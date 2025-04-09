@@ -5,6 +5,7 @@ const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const { User, StoreTransaction, RevenueTransaction } = require('../models');
 const sequelize = require('../config/database'); // Corrected Import
+const { Package } = require('../models');
 
 // Package purchase endpoint
 router.post('/purchase-package', authenticateToken, async (req, res) => {
@@ -14,13 +15,23 @@ router.post('/purchase-package', authenticateToken, async (req, res) => {
         // Start a transaction
         transaction = await sequelize.transaction();
 
-        const { chips, gems, price } = req.body;
+        const { package_id } = req.body;
         const userId = req.user.id;
 
         // Validate input
-        if (chips === undefined || gems === undefined || price === undefined) {
-            throw new Error('Invalid package data: chips, gems, and price are required.');
+        if (!package_id) {
+            throw new Error('Package ID is required.');
         }
+
+        // Find the package
+        const packageItem = await Package.findByPk(package_id, { transaction });
+        if (!packageItem || !packageItem.active) {
+            throw new Error('Package not found or not active.');
+        }
+
+        const chips = packageItem.chips;
+        const gems = packageItem.gems;
+        const price = packageItem.price;
 
         // Find and update user balance
         const user = await User.findByPk(userId, { transaction });

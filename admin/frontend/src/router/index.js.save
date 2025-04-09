@@ -76,12 +76,6 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
-    path: '/packages',
-    name: 'Packages',
-    component: PackageList,
-    meta: { requiresAuth: true}
-   },
-  {
     path: '/daily-tasks',
     name: 'DailyTasks',
     component: () => import('../views/DailyTasks/Index.vue'),
@@ -92,7 +86,8 @@ const routes = [
     name: 'SeasonPass',
     component: () => import('../views/SeasonPass/Index.vue'),
     meta: { requiresAuth: true, permission: 'view_config' }
-  }
+  },
+
 ]
 
 const router = createRouter({
