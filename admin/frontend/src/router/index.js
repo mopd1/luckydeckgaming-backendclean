@@ -14,6 +14,10 @@ import GameConfig from '../views/Config/GameConfig.vue'
 import NotFound from '../views/NotFound.vue'
 import Economy from '../views/Economy.vue'
 import PackageList from '../views/Packages/PackageList.vue'
+import CrmIndex from '@/views/CRM/index.vue'
+import MessageForm from '@/views/CRM/MessageForm.vue'
+import CharacterForm from '@/views/CRM/CharacterForm.vue'
+import SendMessage from '@/views/CRM/SendMessage.vue'
 
 const routes = [
   {
@@ -86,6 +90,60 @@ const routes = [
     name: 'DailyTasks',
     component: () => import('../views/DailyTasks/Index.vue'),
     meta: { requiresAuth: true, permission: 'view_config' }
+  },
+  {
+    path: '/crm',
+    name: 'crm',
+    component: CrmIndex,
+    meta: {
+      requiresAuth: true,
+      title: 'CRM Management'
+    }
+  },
+  {
+    path: '/crm/messages/new',
+    name: 'crm-message-create',
+    component: MessageForm,
+    meta: {
+      requiresAuth: true,
+      title: 'Create CRM Message'
+    }
+  },
+  {
+    path: '/crm/messages/:id/edit',
+    name: 'crm-message-edit',
+    component: MessageForm,
+    meta: {
+      requiresAuth: true,
+      title: 'Edit CRM Message'
+    }
+  },
+  {
+    path: '/crm/messages/:id/send',
+    name: 'crm-message-send',
+    component: SendMessage,
+    meta: {
+      requiresAuth: true,
+      title: 'Send CRM Message'
+    }
+  },
+  {
+    path: '/crm/characters/new',
+    name: 'crm-character-create',
+    component: CharacterForm,
+    meta: {
+      requiresAuth: true,
+      title: 'Create CRM Character'
+    }
+  },
+  {
+    path: '/crm/characters/:id/edit',
+    name: 'crm-character-edit',
+    component: CharacterForm,
+    meta: {
+      requiresAuth: true,
+      title: 'Edit CRM Character'
+    }
   },
   {
     path: '/season-pass',

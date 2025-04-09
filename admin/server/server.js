@@ -8,6 +8,7 @@ const economyRoutes = require('./routes/economyRoutes');
 const dailyTasksProxy = require('./routes/dailyTasksProxy');
 const seasonPassAdminRoutes = require('./routes/seasonPassAdminRoutes');
 const packageRoutes = require('./routes/packageRoutes');
+const crmRoutes = require('./routes/crmRoutes');
 
 // Create Express app
 const app = express();
@@ -39,6 +40,7 @@ app.use('/api/economy', economyRoutes);
 app.use('/api/daily-tasks', dailyTasksProxy);
 app.use('/api/admin/season-pass', seasonPassAdminRoutes);
 app.use('/api/packages', packageRoutes);
+app.use('/crm', crmRoutes);
 
 // Placeholder for other routes that haven't been implemented yet
 app.use('/api/database', (req, res) => {

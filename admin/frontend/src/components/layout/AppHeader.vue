@@ -51,6 +51,12 @@
         :to="{ name: 'UserList' }"
       ></v-list-item>
       <v-list-item
+        v-if="hasPermission('view_config')"
+        title="CRM Messages"
+        prepend-icon="mdi-message-text"
+        :to="{ name: 'crm' }"
+      ></v-list-item>
+      <v-list-item
         v-if="hasPermission('view_database')"
         title="Database"
         prepend-icon="mdi-database"

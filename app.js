@@ -19,6 +19,7 @@ const dailyTaskRoutes = require('./routes/dailyTaskRoutes');
 const seasonPassRoutes = require('./routes/seasonPassRoutes');
 const { scheduleSeasonCreation } = require('./utils/seasonAutoCreation');
 const packageRoutes = require('./routes/packageRoutes');
+const crmRoutes = require('./routes/crmRoutes');
 
 // Trust nginx proxy
 if (process.env.NODE_ENV === 'production') {
@@ -159,6 +160,7 @@ app.use('/api/player-grading', playerGradingRoutes);
 console.log("!!! --- Mounting /api/season-pass with router: --- !!!", typeof seasonPassRoutes);
 app.use('/api/season-pass', seasonPassRoutes);
 app.use('/api/packages', packageRoutes);
+app.use('/api/crm', crmRoutes);
 
 // Default routes without rate limiting
 app.use('/api', indexRoutes);

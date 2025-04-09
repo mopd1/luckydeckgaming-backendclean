@@ -31,8 +31,10 @@ db.SeasonPass = require('./SeasonPass')(sequelize, Sequelize.DataTypes);
 db.SeasonMilestone = require('./SeasonMilestone')(sequelize, Sequelize.DataTypes);
 db.UserSeasonProgress = require('./UserSeasonProgress')(sequelize, Sequelize.DataTypes);
 db.UserInventory = require('./UserInventory')(sequelize, Sequelize.DataTypes);
-// Add the new Package model
 db.Package = require('./package')(sequelize, Sequelize.DataTypes);
+db.CRMCharacter = require('./CRMCharacter')(sequelize, DataTypes);
+db.CRMMessage = require('./CRMMessage')(sequelize, DataTypes);
+db.UserCRMMessage = require('./UserCRMMessage')(sequelize, DataTypes);
 
 // Initialize associations
 Object.keys(db).forEach(modelName => {
