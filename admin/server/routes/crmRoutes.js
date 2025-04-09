@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { sequelize, CRMCharacter, CRMMessage, UserCRMMessage, User, DailyTask } = require('../../../models');
-const { ensureAuthenticated } = require('../middleware/userAuth');
+const { authenticateToken } = require('../middleware/userAuth');
 const { Op } = require('sequelize');
 
 // Apply auth middleware to all routes
-router.use(ensureAuthenticated);
+router.use(authenticateToken);
 
 // Get all CRM characters
 router.get('/admin/characters', async (req, res) => {
