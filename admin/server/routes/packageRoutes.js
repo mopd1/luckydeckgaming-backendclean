@@ -1,25 +1,11 @@
-// routes/packageRoutes.js
+// admin/server/routes/packageRoutes.js
 const express = require('express');
 const router = express.Router();
-const { Package } = require('../models');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/userAuth'); // Use userAuth middleware
+const { Package } = require('../../../models'); // Import from main models
+const { Op } = require('sequelize');
 
-// Get all active packages (for the game client)
-router.get('/', async (req, res) => {
-  try {
-    const packages = await Package.findAll({
-      where: { active: true },
-      order: [['display_order', 'ASC']]
-    });
-    
-    res.json({ packages });
-  } catch (error) {
-    console.error('Error fetching packages:', error);
-    res.status(500).json({ message: 'Error fetching packages', error: process.env.NODE_ENV === 'development' ? error.message : undefined });
-  }
-});
-
-// Admin routes for package management (restricted by authentication)
+// Get all packages (for admin management)
 router.get('/admin/all', authenticateToken, async (req, res) => {
   try {
     // Check if user is admin
