@@ -1,6 +1,5 @@
 // models/CRMMessage.js
 'use strict';
-
 module.exports = (sequelize, DataTypes) => {
   const CRMMessage = sequelize.define('CRMMessage', {
     id: {
@@ -71,23 +70,19 @@ module.exports = (sequelize, DataTypes) => {
     timestamps: true,
     underscored: true
   });
-
   CRMMessage.associate = function(models) {
     CRMMessage.belongsTo(models.CRMCharacter, {
       foreignKey: 'character_id',
       as: 'character'
     });
-    
     CRMMessage.belongsTo(models.DailyTask, {
       foreignKey: 'task_id',
       targetKey: 'task_id'
     });
-    
-    CRMMessage.belongsToMany(models.User, {
-      through: models.UserCRMMessage,
+    // Change from belongsToMany to hasMany for direct access
+    CRMMessage.hasMany(models.UserCRMMessage, {
       foreignKey: 'message_id'
     });
   };
-
   return CRMMessage;
 };

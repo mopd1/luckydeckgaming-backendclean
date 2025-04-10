@@ -1,6 +1,5 @@
 // models/UserCRMMessage.js
 'use strict';
-
 module.exports = (sequelize, DataTypes) => {
   const UserCRMMessage = sequelize.define('UserCRMMessage', {
     id: {
@@ -49,10 +48,15 @@ module.exports = (sequelize, DataTypes) => {
     timestamps: true,
     underscored: true
   });
-
   UserCRMMessage.associate = function(models) {
-    // Associations are defined in the User and CRMMessage models
+    // Add explicit belongsTo association with CRMMessage
+    UserCRMMessage.belongsTo(models.CRMMessage, {
+      foreignKey: 'message_id'
+    });
+    // Add explicit belongsTo association with User
+    UserCRMMessage.belongsTo(models.User, {
+      foreignKey: 'user_id'
+    });
   };
-
   return UserCRMMessage;
 };

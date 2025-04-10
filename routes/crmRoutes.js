@@ -22,6 +22,7 @@ router.get('/messages', authenticateToken, async (req, res) => {
           include: [
             {
               model: db.CRMCharacter,
+              as :'character',
               attributes: ['name', 'title', 'avatar_data']
             }
           ]
@@ -79,6 +80,7 @@ router.get('/messages/:id', authenticateToken, async (req, res) => {
           include: [
             {
               model: db.CRMCharacter,
+              as: 'character',
               attributes: ['name', 'title', 'avatar_data']
             },
             {
