@@ -34,13 +34,14 @@ router.get('/messages', authenticateToken, async (req, res) => {
     // Format the messages for API response
     const messages = userMessages.map(userMessage => {
       const message = userMessage.CRMMessage;
+      const senderCharacter = message.character;
       return {
         id: userMessage.id,
         message_id: message.id,
         title: message.title,
         content: message.content,
-        sender_name: message.CRMCharacter ? message.CRMCharacter.name : 'System',
-        sender_title: message.CRMCharacter ? message.CRMCharacter.title : null,
+        sender_name: senderCharacter ? senderCharacter.name : 'System',
+        sender_title: senderCharacter ? senderCharacter.title : null,
         sender_avatar_data: message.CRMCharacter ? message.CRMCharacter.avatar_data : null,
         message_type: message.message_type,
         read: userMessage.read,
@@ -97,6 +98,7 @@ router.get('/messages/:id', authenticateToken, async (req, res) => {
     }
     
     const message = userMessage.CRMMessage;
+    const senderCharacter = message.character;
     
     // Format the message for API response
     const formattedMessage = {
@@ -104,8 +106,8 @@ router.get('/messages/:id', authenticateToken, async (req, res) => {
       message_id: message.id,
       title: message.title,
       content: message.content,
-      sender_name: message.CRMCharacter ? message.CRMCharacter.name : 'System',
-      sender_title: message.CRMCharacter ? message.CRMCharacter.title : null,
+      sender_name: senderCharacter ? senderCharacter.name : 'System',
+      sender_title: senderCharacter ? senderCharacter.title : null,
       sender_avatar_data: message.CRMCharacter ? message.CRMCharacter.avatar_data : null,
       message_type: message.message_type,
       read: userMessage.read,
