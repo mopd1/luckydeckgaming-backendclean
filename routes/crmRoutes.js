@@ -42,7 +42,7 @@ router.get('/messages', authenticateToken, async (req, res) => {
         content: message.content,
         sender_name: senderCharacter ? senderCharacter.name : 'System',
         sender_title: senderCharacter ? senderCharacter.title : null,
-        sender_avatar_data: message.CRMCharacter ? message.CRMCharacter.avatar_data : null,
+        sender_avatar_data: senderCharacter ? senderCharacter.avatar_data : null,
         message_type: message.message_type,
         read: userMessage.read,
         archived: userMessage.archived,
@@ -108,7 +108,7 @@ router.get('/messages/:id', authenticateToken, async (req, res) => {
       content: message.content,
       sender_name: senderCharacter ? senderCharacter.name : 'System',
       sender_title: senderCharacter ? senderCharacter.title : null,
-      sender_avatar_data: message.CRMCharacter ? message.CRMCharacter.avatar_data : null,
+      sender_avatar_data: message.senderCharacter ? message.senderCharacter.avatar_data : null,
       message_type: message.message_type,
       read: userMessage.read,
       archived: userMessage.archived,
@@ -462,7 +462,12 @@ router.post('/trigger', authenticateToken, async (req, res) => {
             break;
           }
         }
-        
+
+        if (Object.keys(event_data).length !== Object.keys(triggerData).length) {
+          isMatch = false;
+        }
+
+
         if (!isMatch) {
           continue;
         }
