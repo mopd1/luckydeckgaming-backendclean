@@ -74,7 +74,8 @@ module.exports = (sequelize, DataTypes) => {
 
   CRMMessage.associate = function(models) {
     CRMMessage.belongsTo(models.CRMCharacter, {
-      foreignKey: 'character_id'
+      foreignKey: 'character_id',
+      as: 'character'
     });
     
     CRMMessage.belongsTo(models.DailyTask, {
