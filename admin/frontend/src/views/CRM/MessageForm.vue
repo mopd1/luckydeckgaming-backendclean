@@ -3,8 +3,9 @@
     <h1 class="text-h4 mb-4">
       {{ isNew ? 'Create New Message' : 'Edit Message' }}
     </h1>
-    
+
     <v-form ref="form" v-model="formValid" @submit.prevent="saveMessage">
+      <!-- Basic Info Card -->
       <v-card class="mb-4">
         <v-card-title>Basic Information</v-card-title>
         <v-card-text>
@@ -17,17 +18,16 @@
                 :rules="[v => !!v || 'Title is required']"
               ></v-text-field>
             </v-col>
-            
             <v-col cols="12" md="4">
               <v-select
                 v-model="message.message_type"
                 label="Message Type *"
                 :items="messageTypes"
                 required
+                :rules="[v => !!v || 'Message Type is required']"
                 @update:model-value="handleTypeChange"
               ></v-select>
             </v-col>
-            
             <v-col cols="12">
               <v-textarea
                 v-model="message.content"
@@ -37,7 +37,6 @@
                 rows="5"
               ></v-textarea>
             </v-col>
-            
             <v-col cols="12" md="6">
               <v-select
                 v-model="message.character_id"
@@ -46,22 +45,23 @@
                 item-title="name"
                 item-value="id"
                 clearable
-                :hint="!characters.length ? 'No characters available' : ''"
-                :disabled="!characters.length"
+                :loading="loadingCharacters"
+                :hint="!loadingCharacters && !characters.length ? 'No characters available. Create one first.' : ''"
+                :disabled="loadingCharacters || !characters.length"
+                persistent-hint
               >
                 <template v-slot:selection="{ item }">
-                  {{ item.title ? `${item.raw.name} (${item.raw.title})` : item.raw.name }}
+                  {{ item.raw.title ? `${item.raw.name} (${item.raw.title})` : item.raw.name }}
                 </template>
                 <template v-slot:item="{ item, props }">
                   <v-list-item v-bind="props">
                     <template v-slot:title>
-                      {{ item.title ? `${item.raw.name} (${item.raw.title})` : item.raw.name }}
+                       {{ item.raw.title ? `${item.raw.name} (${item.raw.title})` : item.raw.name }}
                     </template>
                   </v-list-item>
                 </template>
               </v-select>
             </v-col>
-            
             <v-col cols="12" md="6">
               <v-switch
                 v-model="message.active"
@@ -73,8 +73,8 @@
           </v-row>
         </v-card-text>
       </v-card>
-      
-      <!-- Task-specific fields -->
+
+      <!-- Task Card -->
       <v-card v-if="message.message_type === 'TASK'" class="mb-4">
         <v-card-title>Task Configuration</v-card-title>
         <v-card-text>
@@ -87,11 +87,12 @@
                 item-title="formatted_name"
                 item-value="task_id"
                 clearable
-                :hint="!tasks.length ? 'No tasks available' : 'Select a task or leave blank for custom task'"
-                :disabled="!tasks.length"
+                :loading="loadingTasks"
+                :hint="!loadingTasks && !tasks.length ? 'No tasks available' : 'Select a task or leave blank for custom task'"
+                :disabled="loadingTasks || !tasks.length"
+                persistent-hint
               ></v-select>
             </v-col>
-            
             <v-col cols="12">
               <v-textarea
                 v-model="taskDataJson"
@@ -100,13 +101,14 @@
                 hint="Optional JSON with additional task configuration"
                 persistent-hint
                 :error-messages="jsonErrors.taskData"
+                @input="validateJson('taskData')"
               ></v-textarea>
             </v-col>
           </v-row>
         </v-card-text>
       </v-card>
-      
-      <!-- Reward fields (shown for both TASK and REWARD types) -->
+
+      <!-- Reward Card -->
       <v-card v-if="message.message_type === 'TASK' || message.message_type === 'REWARD'" class="mb-4">
         <v-card-title>Reward Configuration</v-card-title>
         <v-card-text>
@@ -125,21 +127,24 @@
                 item-value="value"
               ></v-select>
             </v-col>
-            
             <v-col cols="12" md="6">
+              <!-- FIX: Moved comment outside the tag -->
+              <!-- Bind rules to computed property -->
               <v-text-field
                 v-model.number="message.reward_amount"
                 label="Reward Amount"
                 type="number"
                 min="0"
                 :disabled="!message.reward_type"
+                :rules="rewardAmountRules"
+                validate-on="input"
               ></v-text-field>
             </v-col>
           </v-row>
         </v-card-text>
       </v-card>
-      
-      <!-- Trigger fields -->
+
+      <!-- Trigger Card -->
       <v-card class="mb-4">
         <v-card-title>Trigger Configuration</v-card-title>
         <v-card-text>
@@ -152,44 +157,45 @@
                 clearable
               ></v-select>
             </v-col>
-            
             <v-col cols="12">
               <v-textarea
                 v-model="triggerDataJson"
                 label="Trigger Data (JSON)"
                 rows="4"
-                hint="Optional JSON with trigger configuration (e.g. {&quot;scene&quot;: &quot;BlackjackScene&quot;})"
+                hint="Optional JSON with trigger configuration. Ex: { scene: 'BlackjackScene' }"
                 persistent-hint
                 :error-messages="jsonErrors.triggerData"
+                @input="validateJson('triggerData')"
               ></v-textarea>
             </v-col>
-            
             <v-col cols="12">
               <v-textarea
                 v-model="segmentDataJson"
                 label="Segment Data (JSON)"
                 rows="4"
-                hint="Optional JSON with user segmentation criteria (e.g. {&quot;min_balance&quot;: 1000})"
+                hint="Optional JSON with user segmentation criteria. Ex: { min_balance: 1000 }"
                 persistent-hint
                 :error-messages="jsonErrors.segmentData"
+                @input="validateJson('segmentData')"
               ></v-textarea>
             </v-col>
           </v-row>
         </v-card-text>
       </v-card>
-      
-      <div class="d-flex justify-space-between">
+
+      <!-- Actions -->
+      <div class="d-flex justify-space-between pa-4">
         <v-btn
           color="secondary"
           @click="$router.push({ name: 'crm' })"
+          :disabled="saving"
         >
           Cancel
         </v-btn>
-        
         <v-btn
           color="primary"
           type="submit"
-          :disabled="!formValid || saving"
+          :disabled="!formValid || saving || hasJsonErrors"
           :loading="saving"
         >
           {{ saving ? 'Saving...' : 'Save Message' }}
@@ -200,7 +206,7 @@
 </template>
 
 <script>
-import apiService from '@/services/api';
+import apiService from '@/services/api'; // Ensure path is correct
 
 export default {
   name: 'MessageForm',
@@ -209,7 +215,10 @@ export default {
       isNew: true,
       formValid: false,
       saving: false,
+      loadingCharacters: false,
+      loadingTasks: false,
       message: {
+        id: null,
         title: '',
         content: '',
         character_id: null,
@@ -227,9 +236,9 @@ export default {
       triggerDataJson: '{}',
       segmentDataJson: '{}',
       jsonErrors: {
-        taskData: [],
-        triggerData: [],
-        segmentData: []
+        taskData: '',
+        triggerData: '',
+        segmentData: ''
       },
       characters: [],
       tasks: [],
@@ -249,144 +258,281 @@ export default {
       ]
     }
   },
+  computed: {
+    hasJsonErrors() {
+      return !!this.jsonErrors.taskData || !!this.jsonErrors.triggerData || !!this.jsonErrors.segmentData;
+    },
+    rewardAmountRules() {
+      if (!this.message.reward_type) {
+        return [];
+      }
+      return [
+        v => v !== null && v !== '' || 'Amount is required when Reward Type is set',
+        v => v >= 0 || 'Amount must be 0 or more',
+        v => Number.isInteger(parseFloat(v)) || 'Amount must be a whole number'
+      ];
+    }
+  },
   created() {
     this.isNew = !this.$route.params.id;
     this.fetchCharacters();
     this.fetchTasks();
-    
+
     if (!this.isNew) {
       this.fetchMessage(this.$route.params.id);
     }
   },
   methods: {
+    // ---- Data Fetching Methods ----
     async fetchCharacters() {
+      this.loadingCharacters = true;
       try {
-        const response = await apiService.get('/api/crm/admin/characters');
-        this.characters = response.data.characters;
+        const response = await apiService.get('/crm/admin/characters');
+        if (response && response.data && response.data.success && Array.isArray(response.data.characters)) {
+           this.characters = response.data.characters;
+           console.log('Characters fetched:', this.characters.length); // Log count
+        } else {
+            console.warn('Received unexpected character data structure:', response?.data);
+            this.characters = [];
+            throw new Error(response?.data?.error || 'Invalid response structure for characters.');
+        }
       } catch (error) {
         console.error('Failed to fetch characters:', error);
-        this.$toast.error('Failed to load characters: ' + (error.response?.data?.error || error.message));
+        this.handleApiError(error, 'load characters');
+        this.characters = [];
+      } finally {
+        this.loadingCharacters = false;
       }
     },
+
     async fetchTasks() {
+      this.loadingTasks = true;
       try {
-        const response = await apiService.get('/api/daily-tasks/tasks');
-        this.tasks = response.data.tasks.map(task => ({
-          ...task,
-          formatted_name: `${task.name} (${task.task_id})`
-        }));
+        const response = await apiService.get('/daily-tasks/tasks');
+        // **** LOOK AT THE LOGS - The API MIGHT NOT WRAP tasks in { success: true, tasks: [...] } ****
+        // Let's check the structure more flexibly based on logs
+        console.log('Raw tasks response data:', response?.data); // Log what the API actually returns
+
+        // Adjust this check based on the actual API response structure for tasks
+        // Possibility 1: It returns { success: true, tasks: [...] }
+        if (response?.data?.success && Array.isArray(response.data.tasks)) {
+             this.tasks = response.data.tasks.map(task => ({
+                ...task,
+                formatted_name: `${task.name} (${task.task_id})`
+             }));
+             console.log('Tasks fetched (Structure 1):', this.tasks.length);
+        // Possibility 2: It returns the array directly: [...]
+        } else if (Array.isArray(response?.data)) {
+             this.tasks = response.data.map(task => ({
+                ...task,
+                formatted_name: `${task.name} (${task.task_id})`
+             }));
+             console.log('Tasks fetched (Structure 2):', this.tasks.length);
+        // Possibility 3: It returns { tasks: [...] } without success flag
+        } else if (response?.data && Array.isArray(response.data.tasks)) {
+             this.tasks = response.data.tasks.map(task => ({
+                ...task,
+                formatted_name: `${task.name} (${task.task_id})`
+             }));
+             console.log('Tasks fetched (Structure 3):', this.tasks.length);
+        }
+         else {
+            // If none of the above match, treat as error
+            console.warn('Received unexpected task data structure:', response?.data);
+            this.tasks = [];
+            // Use the error from the response if available, otherwise generic message
+            const errorMessage = response?.data?.error || response?.data?.message || 'Invalid response structure for tasks.';
+            throw new Error(errorMessage);
+        }
       } catch (error) {
+        // Error might have been thrown from the structure check above or be an Axios error
         console.error('Failed to fetch tasks:', error);
-        this.$toast.error('Failed to load tasks: ' + (error.response?.data?.error || error.message));
+        // Pass the error message directly to handler if it's already extracted
+        this.handleApiError(error, 'load tasks', error.message);
+        this.tasks = [];
+      } finally {
+        this.loadingTasks = false;
       }
     },
+
     async fetchMessage(id) {
+      this.saving = true;
       try {
-        const response = await apiService.get(`/api/crm/admin/messages/${id}`);
-        this.message = response.data;
-        
-// Initialize JSON string fields
-        this.taskDataJson = this.message.task_data ? JSON.stringify(this.message.task_data, null, 2) : '{}';
-        this.triggerDataJson = this.message.trigger_data ? JSON.stringify(this.message.trigger_data, null, 2) : '{}';
-        this.segmentDataJson = this.message.segment_data ? JSON.stringify(this.message.segment_data, null, 2) : '{}';
+        const response = await apiService.get(`/crm/admin/messages/${id}`);
+         if (response && response.data && response.data.success && response.data.message) {
+            this.message = response.data.message;
+            console.log('Message fetched:', this.message);
+
+            this.taskDataJson = this.message.task_data ? JSON.stringify(this.message.task_data, null, 2) : '{}';
+            this.triggerDataJson = this.message.trigger_data ? JSON.stringify(this.message.trigger_data, null, 2) : '{}';
+            this.segmentDataJson = this.message.segment_data ? JSON.stringify(this.message.segment_data, null, 2) : '{}';
+
+            this.$nextTick(() => {
+                if (this.$refs.form) this.$refs.form.validate();
+            });
+         } else {
+             console.warn('Received unexpected message data structure:', response?.data);
+             throw new Error(response?.data?.error || 'Invalid response structure for message.');
+         }
       } catch (error) {
         console.error('Failed to fetch message:', error);
-        this.$toast.error('Failed to load message: ' + (error.response?.data?.error || error.message));
+        this.handleApiError(error, 'load message', error.message);
         this.$router.push({ name: 'crm' });
+      } finally {
+        this.saving = false;
       }
     },
+
+    // ---- Form Logic Methods ----
     handleTypeChange() {
-      // Reset task and reward fields if type changes to INFO
       if (this.message.message_type === 'INFO') {
         this.message.task_id = null;
         this.message.reward_type = null;
         this.message.reward_amount = 0;
+        this.taskDataJson = '{}';
+        this.jsonErrors.taskData = '';
       }
+       if (this.message.message_type === 'REWARD') {
+          this.message.task_id = null;
+          this.taskDataJson = '{}';
+          this.jsonErrors.taskData = '';
+       }
+       this.$nextTick(() => {
+            if (this.$refs.form) this.$refs.form.validate();
+       });
     },
-    validateJson() {
-      // Reset errors
-      this.jsonErrors = {
-        taskData: [],
-        triggerData: [],
-        segmentData: []
-      };
-      
+
+    validateJson(fieldKey) {
+      const jsonString = this[`${fieldKey}Json`];
+      this.jsonErrors[fieldKey] = '';
       let isValid = true;
-      
-      // Validate task data
-      if (this.taskDataJson.trim() && this.taskDataJson !== '{}') {
+
+      if (jsonString && jsonString.trim() && jsonString.trim() !== '{}') {
         try {
-          JSON.parse(this.taskDataJson);
+          JSON.parse(jsonString);
         } catch (e) {
-          this.jsonErrors.taskData = ['Invalid JSON format: ' + e.message];
+          this.jsonErrors[fieldKey] = 'Invalid JSON: ' + e.message;
           isValid = false;
         }
       }
-      
-      // Validate trigger data
-      if (this.triggerDataJson.trim() && this.triggerDataJson !== '{}') {
-        try {
-          JSON.parse(this.triggerDataJson);
-        } catch (e) {
-          this.jsonErrors.triggerData = ['Invalid JSON format: ' + e.message];
-          isValid = false;
-        }
-      }
-      
-      // Validate segment data
-      if (this.segmentDataJson.trim() && this.segmentDataJson !== '{}') {
-        try {
-          JSON.parse(this.segmentDataJson);
-        } catch (e) {
-          this.jsonErrors.segmentData = ['Invalid JSON format: ' + e.message];
-          isValid = false;
-        }
-      }
-      
+       this.$nextTick(() => {
+            if (this.$refs.form) this.$refs.form.validate();
+       });
       return isValid;
     },
+
+    validateAllJson() {
+        const taskValid = this.validateJson('taskData');
+        const triggerValid = this.validateJson('triggerData');
+        const segmentValid = this.validateJson('segmentData');
+        return taskValid && triggerValid && segmentValid;
+    },
+
+    // ---- Save Method ----
     async saveMessage() {
-      if (!this.$refs.form.validate() || !this.validateJson()) {
+      const formIsValid = await this.$refs.form.validate();
+      const jsonIsValid = this.validateAllJson();
+
+      if (!formIsValid || !jsonIsValid) {
+        console.warn('Validation failed. Form valid:', formIsValid, 'JSON valid:', jsonIsValid);
+         this.showToast('warning', 'Please correct the errors before saving.');
         return;
       }
-      
+
       this.saving = true;
-      
+
       try {
-        // Parse the JSON fields
-        const payload = {
-          ...this.message
-        };
-        
-        // Parse JSON fields if they're not empty
-        if (this.taskDataJson.trim() && this.taskDataJson !== '{}') {
+        const payload = JSON.parse(JSON.stringify(this.message));
+
+        if (this.taskDataJson && this.taskDataJson.trim() !== '{}' && !this.jsonErrors.taskData) {
           payload.task_data = JSON.parse(this.taskDataJson);
-        }
-        
-        if (this.triggerDataJson.trim() && this.triggerDataJson !== '{}') {
-          payload.trigger_data = JSON.parse(this.triggerDataJson);
-        }
-        
-        if (this.segmentDataJson.trim() && this.segmentDataJson !== '{}') {
-          payload.segment_data = JSON.parse(this.segmentDataJson);
-        }
-        
-        if (this.isNew) {
-          await apiService.post('/crm/admin/messages', payload);
-          this.$toast.success('Message created successfully');
         } else {
-          await apiService.put(`/crm/admin/messages/${this.message.id}`, payload);
-          this.$toast.success('Message updated successfully');
+          payload.task_data = null;
         }
-        
-        this.$router.push({ name: 'crm' });
+
+        if (this.triggerDataJson && this.triggerDataJson.trim() !== '{}' && !this.jsonErrors.triggerData) {
+          payload.trigger_data = JSON.parse(this.triggerDataJson);
+        } else {
+           payload.trigger_data = null;
+        }
+
+        if (this.segmentDataJson && this.segmentDataJson.trim() !== '{}' && !this.jsonErrors.segmentData) {
+          payload.segment_data = JSON.parse(this.segmentDataJson);
+        } else {
+           payload.segment_data = null;
+        }
+
+        payload.reward_amount = Number(payload.reward_amount) || 0;
+
+        if (!payload.character_id) payload.character_id = null;
+        if (!payload.task_id) payload.task_id = null;
+        if (!payload.reward_type) {
+            payload.reward_type = null;
+            payload.reward_amount = 0;
+        }
+        if (!payload.trigger_type) payload.trigger_type = null;
+
+        console.log('Saving message. Is New:', this.isNew, 'Payload:', JSON.stringify(payload));
+
+        let response;
+
+        if (this.isNew) {
+          response = await apiService.post('/crm/admin/messages', payload);
+        } else {
+          response = await apiService.put(`/crm/admin/messages/${this.message.id}`, payload);
+        }
+
+        console.log('Save Message Raw Response:', response);
+
+        if (response && response.data && response.data.success === true) {
+          const successMessage = this.isNew ? 'Message created successfully' : 'Message updated successfully';
+          console.log(successMessage, 'API Data:', response.data);
+           this.showToast('success', successMessage);
+          this.$router.push({ name: 'crm' });
+        } else {
+          const errorMessage = response?.data?.error || 'API did not indicate success.';
+          console.error('Failed to save message (API logic error):', errorMessage, 'Full response data:', response?.data);
+          this.showToast('error', `Failed to save message: ${errorMessage}`);
+        }
+
       } catch (error) {
-        console.error('Failed to save message:', error);
-        this.$toast.error('Failed to save message: ' + (error.response?.data?.error || error.message));
+         console.error('Failed to save message (Request/Network Error):', error);
+         this.handleApiError(error, 'save message');
       } finally {
         this.saving = false;
       }
-    }
+    },
+
+     // ---- Utility Methods ----
+     showToast(type, message) {
+         if (this.$toast && typeof this.$toast[type] === 'function') {
+             this.$toast[type](message);
+         } else {
+             console.warn(`Toast notification system not available. Message (${type}): ${message}`);
+             alert(`${type.toUpperCase()}: ${message}`);
+         }
+     },
+
+     // Updated error handler to accept an optional pre-extracted message
+     handleApiError(error, action = 'perform action', specificMessage = null) {
+         let errorMessage = specificMessage || `Failed to ${action}. An unknown error occurred.`; // Use specific message if provided
+
+         // If no specific message, try to extract from Axios error object
+         if (!specificMessage) {
+             if (error.response) {
+                console.error(`Error Response Data (${action}):`, error.response.data);
+                errorMessage = error.response.data?.error ||
+                               error.response.data?.message ||
+                               (typeof error.response.data === 'string' && error.response.data.length < 100 ? error.response.data : null) ||
+                               `Server responded with status ${error.response.status}`;
+             } else if (error.request) {
+                 errorMessage = `Failed to ${action}. Network error or no response from server.`;
+             } else if (error.message) {
+                  errorMessage = `Failed to ${action}. ${error.message}`;
+             }
+         }
+         this.showToast('error', errorMessage);
+     }
   }
 }
 </script>
