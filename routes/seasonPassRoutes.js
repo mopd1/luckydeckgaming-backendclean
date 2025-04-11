@@ -148,13 +148,33 @@ router.get('/milestones', authenticateToken, async (req, res) => {
     });
     console.log(`GET /milestones: Fetched userProgressRaw directly: ${JSON.stringify(userProgressRaw)}`);
 
-
     // Parse claimed_milestones from the raw data object
     let claimedMilestoneNumbers = [];
     // Handle case where userProgressRaw might be null if record doesn't exist yet
     if (userProgressRaw && userProgressRaw.claimed_milestones) {
         let rawClaimed = userProgressRaw.claimed_milestones;
-       if (rawClaimed) { /* ... (same parsing logic as before) ... */ }
+        
+        // FIX: Properly parse the claimed_milestones
+        if (rawClaimed) {
+            if (typeof rawClaimed === 'string') {
+                try {
+                    const parsed = JSON.parse(rawClaimed);
+                    if (Array.isArray(parsed)) {
+                        claimedMilestoneNumbers = parsed;
+                        console.log(`Successfully parsed claimed_milestones string: ${rawClaimed} into array: ${JSON.stringify(claimedMilestoneNumbers)}`);
+                    } else {
+                        console.warn(`Parsed claimed_milestones not an array: ${JSON.stringify(parsed)}`);
+                    }
+                } catch (e) {
+                    console.error(`Error parsing claimed_milestones: ${rawClaimed}`, e);
+                }
+            } else if (Array.isArray(rawClaimed)) {
+                claimedMilestoneNumbers = [...rawClaimed]; // Create a copy
+                console.log(`claimed_milestones already an array: ${JSON.stringify(claimedMilestoneNumbers)}`);
+            } else {
+                console.warn(`claimed_milestones has unexpected type: ${typeof rawClaimed}`);
+            }
+        }
     } else {
         console.warn(`GET /milestones: No user progress found for user ${userId}, season ${activeSeason.season_id}. Assuming no milestones claimed.`);
     }
