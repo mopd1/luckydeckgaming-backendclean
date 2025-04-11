@@ -38,15 +38,21 @@ try {
  * Get the current active season pass with user progress
  */
 router.get('/current', authenticateToken, async (req, res) => {
-  // Simpler approach: No transaction, assume progress exists, use raw findOne
   try {
     const userId = req.user.id;
     const now = new Date();
 
-    const activeSeason = await SeasonPass.findOne({ where: { /* ... */ } });
+    // Use the same query as in claim-milestone
+    const activeSeason = await SeasonPass.findOne({
+      where: {
+        start_date: { [Op.lte]: now },
+        end_date: { [Op.gt]: now },
+        is_active: true
+      }
+    });
 
     if (!activeSeason) {
-      return res.status(404).json({ /* ... no active season error ... */ });
+      return res.status(404).json({ error: "No active season pass found" });
     }
 
     // *** Directly fetch using findOne with raw: true ***
@@ -104,20 +110,35 @@ router.get('/current', authenticateToken, async (req, res) => {
   }
 });
 
-
 /**
  * Get all milestones for the current season
  */
 router.get('/milestones', authenticateToken, async (req, res) => {
-  // Simpler approach: No transaction, use raw findOne
   try {
     const userId = req.user.id;
     const now = new Date();
 
-    const activeSeason = await SeasonPass.findOne({ where: { /* ... */ } });
-    if (!activeSeason) { return res.json({ season_id: null, milestones: [] }); }
+    // Use the same query as in claim-milestone
+    const activeSeason = await SeasonPass.findOne({
+      where: {
+        start_date: { [Op.lte]: now },
+        end_date: { [Op.gt]: now },
+        is_active: true
+      }
+    });
+    
+    if (!activeSeason) { 
+      return res.json({ season_id: null, milestones: [] }); 
+    }
 
-    const milestones = await SeasonMilestone.findAll({ where: { /* ... */ }, order: [['milestone_number', 'ASC']] });
+    // Add specific where clause for milestones
+    const milestones = await SeasonMilestone.findAll({ 
+      where: { 
+        season_id: activeSeason.season_id,
+        is_active: true
+      }, 
+      order: [['milestone_number', 'ASC']] 
+    });
 
     // *** Directly fetch using findOne with raw: true ***
     const userProgressRaw = await UserSeasonProgress.findOne({
@@ -174,7 +195,7 @@ router.post('/claim-milestone', authenticateToken, async (req, res) => {
   
   try {
     const userId = req.user.id;
-    const { milestone_number } = req.body;
+    const { milestone_number, season_id } = req.body;
     
     if (!milestone_number) {
       await transaction.rollback();
@@ -184,20 +205,38 @@ router.post('/claim-milestone', authenticateToken, async (req, res) => {
     // Get the current date in UTC
     const now = new Date();
     
-    // Find the active season pass
-    const activeSeason = await SeasonPass.findOne({
-      where: {
-        start_date: { [Op.lte]: now },
-        end_date: { [Op.gt]: now },
-        is_active: true
-      },
-      transaction
-    });
+    // Find the active season pass - prioritize season_id from request if provided
+    let activeSeason;
+    if (season_id) {
+      activeSeason = await SeasonPass.findOne({
+        where: {
+          season_id: season_id,
+          is_active: true
+        },
+        transaction
+      });
+      console.log(`Using provided season_id: ${season_id} from request`);
+    }
+    
+    // Fallback to date-based query if no season found or no ID provided
+    if (!activeSeason) {
+      activeSeason = await SeasonPass.findOne({
+        where: {
+          start_date: { [Op.lte]: now },
+          end_date: { [Op.gt]: now },
+          is_active: true
+        },
+        transaction
+      });
+      console.log(`Falling back to date-based active season query`);
+    }
     
     if (!activeSeason) {
       await transaction.rollback();
       return res.status(404).json({ error: 'No active season pass found' });
     }
+    
+    console.log(`Active season found: ${activeSeason.season_id}`);
     
     // Find the milestone
     const milestone = await SeasonMilestone.findOne({
@@ -214,22 +253,37 @@ router.post('/claim-milestone', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Milestone not found' });
     }
     
-    // Get user progress
-    let userProgress = await UserSeasonProgress.findOne({
-      where: {
-        user_id: userId,
-        season_id: activeSeason.season_id
-      },
-      transaction
-    });
-    
-    if (!userProgress) {
+    // Get or create user progress
+    let userProgress, created;
+    try {
+      [userProgress, created] = await UserSeasonProgress.findOrCreate({
+        where: {
+          user_id: userId,
+          season_id: activeSeason.season_id
+        },
+        defaults: {
+          has_inside_track: false,
+          claimed_milestones: '[]' // Empty JSON array as string
+        },
+        transaction
+      });
+      
+      console.log(`User progress ${created ? 'created' : 'found'} for user ${userId}, season ${activeSeason.season_id}`);
+    } catch (error) {
+      console.error('Error finding or creating user progress:', error);
       await transaction.rollback();
-      return res.status(404).json({ error: 'User progress not found' });
+      return res.status(500).json({ error: 'Failed to create user progress record' });
     }
 
-    await userProgress.reload({ transaction }); // Force reload using the transaction context
-    console.log(`Reloaded userProgress, claimed_milestones is now: ${JSON.stringify(userProgress.claimed_milestones)}`);
+    if (created) {
+      // If we just created it, we need to reload to ensure we have the full model
+      await userProgress.reload({ transaction });
+      console.log(`Reloaded newly created userProgress record`);
+    } else {
+      // Only reload existing records (not newly created ones)
+      await userProgress.reload({ transaction });
+      console.log(`Reloaded userProgress, claimed_milestones is now: ${JSON.stringify(userProgress.claimed_milestones)}`);
+    }
     
     // Check if milestone is already claimed (using the refreshed data)
     let claimedMilestones = []; // Start with empty array
