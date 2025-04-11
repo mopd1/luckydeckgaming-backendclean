@@ -37,6 +37,15 @@
                 rows="5"
               ></v-textarea>
             </v-col>
+            <v-col cols="12">
+              <v-text-field
+                v-model="message.image_url"
+                label="Image URL"
+                hint="Path to an image file (e.g., res://assets/CRM_characters/image.png)"
+                persistent-hint
+                clearable
+              ></v-text-field>
+            </v-col>
             <v-col cols="12" md="6">
               <v-select
                 v-model="message.character_id"
@@ -230,7 +239,8 @@ export default {
         trigger_type: null,
         trigger_data: null,
         segment_data: null,
-        active: true
+        active: true,
+        image_url: ''
       },
       taskDataJson: '{}',
       triggerDataJson: '{}',

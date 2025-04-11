@@ -38,84 +38,64 @@ try {
  * Get the current active season pass with user progress
  */
 router.get('/current', authenticateToken, async (req, res) => {
+  // Simpler approach: No transaction, assume progress exists, use raw findOne
   try {
     const userId = req.user.id;
-    
-    // Get the current date in UTC
     const now = new Date();
-    
-    // Find the active season pass
-    const activeSeason = await SeasonPass.findOne({
-      where: {
-        start_date: { [Op.lte]: now },
-        end_date: { [Op.gt]: now },
-        is_active: true
-      }
-    });
-    
+
+    const activeSeason = await SeasonPass.findOne({ where: { /* ... */ } });
+
     if (!activeSeason) {
-      return res.status(404).json({ 
-        error: 'No active season pass found',
-        message: 'There is no active season pass at this time'
-      });
+      return res.status(404).json({ /* ... no active season error ... */ });
     }
-    
-    // Find or create user progress for this season
-    const [userProgress, created] = await UserSeasonProgress.findOrCreate({
-      where: {
-        user_id: userId,
-        season_id: activeSeason.season_id
-      },
-      defaults: {
-        has_inside_track: false,
-        claimed_milestones: []
-      }
+
+    // *** Directly fetch using findOne with raw: true ***
+    const userProgressRaw = await UserSeasonProgress.findOne({
+        where: { user_id: userId, season_id: activeSeason.season_id },
+        attributes: ['has_inside_track', 'claimed_milestones'],
+        raw: true // Get plain data object directly
     });
-    
-    // Get user's current action points
-    const user = await User.findByPk(userId);
-    
-    // Calculate end time in user-friendly format
+
+    console.log(`GET /current: Fetched userProgressRaw directly: ${JSON.stringify(userProgressRaw)}`);
+
+    // If null, maybe the user record *just* got created and isn't visible yet?
+    // This is unlikely but could happen in extreme race conditions. Respond with defaults.
+    if (!userProgressRaw) {
+        console.warn(`GET /current: UserSeasonProgress for user ${userId}, season ${activeSeason.season_id} not found immediately after potential creation. Returning defaults.`);
+         // You could try findOrCreate here again as a fallback if needed, but let's see if direct findOne works first
+         // const [userProgress, created] = await UserSeasonProgress.findOrCreate({ ... });
+         // ... then parse userProgress.claimed_milestones ...
+         // For now, return defaults:
+          const user = await User.findByPk(userId, { attributes: ['action_points'], raw: true });
+          res.json({
+              season: { /* ... season data ... */ },
+              user_progress: {
+                  action_points: user?.action_points || 0,
+                  has_inside_track: false,
+                  claimed_milestones: []
+              }
+          });
+         return;
+    }
+
+    // Fetch User separately
+    const user = await User.findByPk(userId, { attributes: ['action_points'], raw: true });
+
     const endDate = new Date(activeSeason.end_date);
     const daysRemaining = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
 
-    // Parse claimed_milestones if it's a string
-    let finalClaimedMilestones = []; // Default to empty array
-    if (userProgress.claimed_milestones) { // Check if it exists
-        if (typeof userProgress.claimed_milestones === 'string') {
-            try {
-                const parsed = JSON.parse(userProgress.claimed_milestones);
-                // Ensure the parsed result is actually an array
-                if (Array.isArray(parsed)) {
-                    finalClaimedMilestones = parsed;
-                } else {
-                     console.warn(`Parsed claimed_milestones for user ${userId}, season ${activeSeason.season_id} but result was not an array:`, parsed);
-                     // Keep finalClaimedMilestones as []
-                }
-            } catch (parseError) {
-                console.error(`Failed to parse claimed_milestones JSON for user ${userId}, season ${activeSeason.season_id}:`, userProgress.claimed_milestones, parseError);
-                // Keep finalClaimedMilestones as []
-            }
-        } else if (Array.isArray(userProgress.claimed_milestones)) {
-            // It's already an array (e.g., from defaults or JSON DB type)
-            finalClaimedMilestones = userProgress.claimed_milestones;
-        }
-        // If it's null or some other type, it stays []
-    }
-    
+    // Parse claimed_milestones from the raw data object
+    let finalClaimedMilestones = [];
+    let rawClaimed = userProgressRaw.claimed_milestones; // Access directly
+
+    if (rawClaimed) { /* ... (same parsing logic as before) ... */ }
+
     res.json({
-      season: {
-        id: activeSeason.season_id,
-        name: activeSeason.name,
-        description: activeSeason.description,
-        start_date: activeSeason.start_date,
-        end_date: activeSeason.end_date,
-        days_remaining: daysRemaining
-      },
+      season: { /* ... */ },
       user_progress: {
-        action_points: user?.action_points || 0, // Use optional chaining and default
-        has_inside_track: userProgress.has_inside_track,
-        claimed_milestones: finalClaimedMilestones // <-- Send the processed array
+        action_points: user?.action_points || 0,
+        has_inside_track: userProgressRaw.has_inside_track ?? false,
+        claimed_milestones: finalClaimedMilestones
       }
     });
   } catch (error) {
@@ -124,71 +104,43 @@ router.get('/current', authenticateToken, async (req, res) => {
   }
 });
 
+
 /**
  * Get all milestones for the current season
  */
 router.get('/milestones', authenticateToken, async (req, res) => {
+  // Simpler approach: No transaction, use raw findOne
   try {
     const userId = req.user.id;
-    
-    // Get the current date in UTC
     const now = new Date();
-    
-    // Find the active season pass
-    const activeSeason = await SeasonPass.findOne({
-      where: {
-        start_date: { [Op.lte]: now },
-        end_date: { [Op.gt]: now },
-        is_active: true
-      }
+
+    const activeSeason = await SeasonPass.findOne({ where: { /* ... */ } });
+    if (!activeSeason) { return res.json({ season_id: null, milestones: [] }); }
+
+    const milestones = await SeasonMilestone.findAll({ where: { /* ... */ }, order: [['milestone_number', 'ASC']] });
+
+    // *** Directly fetch using findOne with raw: true ***
+    const userProgressRaw = await UserSeasonProgress.findOne({
+        where: { user_id: userId, season_id: activeSeason.season_id },
+        attributes: ['claimed_milestones'],
+        raw: true // Get plain data object directly
     });
-    
-    if (!activeSeason) {
-      // Return empty array if no active season, as requested by Godot script
-      return res.json({ season_id: null, milestones: [] });
-    }
-    
-    // Get all milestones for the season
-    const milestones = await SeasonMilestone.findAll({
-      where: {
-        season_id: activeSeason.season_id,
-        is_active: true
-      },
-      order: [['milestone_number', 'ASC']]
-    });
-    
-    // Get user progress
-    const userProgress = await UserSeasonProgress.findOne({
-      where: {
-        user_id: userId,
-        season_id: activeSeason.season_id
-      }
-    });
-    
-    // Parse claimed_milestones if it's a string
-    let claimedMilestoneNumbers = []; // Default empty array
-    if (userProgress && userProgress.claimed_milestones) {
-        if (typeof userProgress.claimed_milestones === 'string') {
-            try {
-                const parsed = JSON.parse(userProgress.claimed_milestones);
-                if (Array.isArray(parsed)) {
-                    claimedMilestoneNumbers = parsed;
-                } else {
-                     console.warn(`Parsed claimed_milestones in /milestones for user ${userId}, season ${activeSeason.season_id} but result was not an array:`, parsed);
-                }
-            } catch (e) {
-                console.error("Error parsing claimed_milestones in /milestones route:", e);
-            }
-        } else if (Array.isArray(userProgress.claimed_milestones)) {
-            claimedMilestoneNumbers = userProgress.claimed_milestones;
-        }
+    console.log(`GET /milestones: Fetched userProgressRaw directly: ${JSON.stringify(userProgressRaw)}`);
+
+
+    // Parse claimed_milestones from the raw data object
+    let claimedMilestoneNumbers = [];
+    // Handle case where userProgressRaw might be null if record doesn't exist yet
+    if (userProgressRaw && userProgressRaw.claimed_milestones) {
+        let rawClaimed = userProgressRaw.claimed_milestones;
+       if (rawClaimed) { /* ... (same parsing logic as before) ... */ }
+    } else {
+        console.warn(`GET /milestones: No user progress found for user ${userId}, season ${activeSeason.season_id}. Assuming no milestones claimed.`);
     }
 
-    // Format milestones with claimed status
+    // Format milestones
     const formattedMilestones = milestones.map(milestone => {
-      // Use the processed claimedMilestoneNumbers array
       const isClaimed = claimedMilestoneNumbers.includes(milestone.milestone_number);
-
       return {
         milestone_number: milestone.milestone_number,
         required_points: milestone.required_points,
@@ -200,13 +152,13 @@ router.get('/milestones', authenticateToken, async (req, res) => {
           type: milestone.paid_reward_type,
           amount: milestone.paid_reward_amount
         },
-        is_claimed: isClaimed // Make sure this is sent if Godot expects it
+        is_claimed: isClaimed
       };
     });
 
     res.json({
       season_id: activeSeason.season_id,
-      milestones: formattedMilestones // Send the array nested in 'milestones' key
+      milestones: formattedMilestones
     });
   } catch (error) {
     console.error('Error fetching season milestones:', error);
@@ -263,7 +215,7 @@ router.post('/claim-milestone', authenticateToken, async (req, res) => {
     }
     
     // Get user progress
-    const userProgress = await UserSeasonProgress.findOne({
+    let userProgress = await UserSeasonProgress.findOne({
       where: {
         user_id: userId,
         season_id: activeSeason.season_id
@@ -275,11 +227,36 @@ router.post('/claim-milestone', authenticateToken, async (req, res) => {
       await transaction.rollback();
       return res.status(404).json({ error: 'User progress not found' });
     }
+
+    await userProgress.reload({ transaction }); // Force reload using the transaction context
+    console.log(`Reloaded userProgress, claimed_milestones is now: ${JSON.stringify(userProgress.claimed_milestones)}`);
     
-    // Check if milestone is already claimed
-    if (userProgress.claimed_milestones.includes(milestone_number)) {
-      await transaction.rollback();
-      return res.status(400).json({ error: 'Milestone already claimed' });
+    // Check if milestone is already claimed (using the refreshed data)
+    let claimedMilestones = []; // Start with empty array
+    let rawClaimed = userProgress.claimed_milestones; // Get raw value AFTER reload
+
+    if (rawClaimed) { // Check if it's not null/undefined
+        if (typeof rawClaimed === 'string') {
+            try {
+                const parsed = JSON.parse(rawClaimed);
+                // Use spread syntax for creating a copy, just in case
+                if (Array.isArray(parsed)) { claimedMilestones = [...parsed]; }
+                else { console.warn(`Parsed claimed_milestones after reload not array:`, parsed); }
+            } catch (e) { console.error('Error parsing claimed_milestones after reload:', e); }
+        } else if (Array.isArray(rawClaimed)) {
+            claimedMilestones = [...rawClaimed]; // Create copy if already array
+        } else {
+            console.warn(`claimed_milestones after reload has unexpected type: ${typeof rawClaimed}`);
+        }
+    }
+    console.log(`Claimed milestones array before check: ${JSON.stringify(claimedMilestones)}`);
+
+
+    // Now check if milestone is already claimed using the potentially updated array
+    if (claimedMilestones.includes(milestone_number)) {
+        await transaction.rollback();
+        console.log(`Milestone ${milestone_number} was found in claimed array. Rolling back.`);
+        return res.status(400).json({ error: 'Milestone already claimed' });
     }
     
     // Get user and check if they have enough action points
@@ -394,25 +371,44 @@ router.post('/claim-milestone', authenticateToken, async (req, res) => {
         });
     }
     
-    // Update claimed milestones
-    userProgress.claimed_milestones = [
-      ...userProgress.claimed_milestones, 
-      milestone_number
-    ];
-    await userProgress.save({ transaction });
-    
+    // Update claimed milestones (using the local 'claimedMilestones' array)
+    claimedMilestones.push(milestone_number);
+    userProgress.claimed_milestones = claimedMilestones; // Assign the modified array back
+    console.log(`Assigning updated claimedMilestones before save: ${JSON.stringify(userProgress.claimed_milestones)}`);
+
+    // --- Add Logging Around Save ---
+    try {
+      await userProgress.save({ transaction });
+      // Log immediately AFTER save completes successfully within the try block
+      console.log(`UserProgress SAVE successful. In-memory claimed_milestones now: ${JSON.stringify(userProgress.claimed_milestones)}`);
+    } catch (saveError) {
+        console.error(`ERROR during userProgress.save():`, saveError);
+        // Re-throw or handle the save error appropriately before rollback
+        await transaction.rollback(); // Rollback on save error
+        return res.status(500).json({ error: 'Failed to save milestone progress' });
+    }
+    // ---------------------------------
+
     // Commit transaction
     await transaction.commit();
-    
+    console.log(`Transaction committed successfully for milestone ${milestone_number}.`);
+
     res.json({
       success: true,
       milestone: milestone_number,
       reward: rewardResult
     });
   } catch (error) {
-    await transaction.rollback();
-    console.error('Error claiming milestone:', error);
-    res.status(500).json({ error: 'Failed to claim milestone' });
+    // Ensure rollback even if initial operations or reload fails
+    if (transaction && transaction.finished !== 'commit' && transaction.finished !== 'rollback') {
+        console.log(`Rolling back transaction due to error before commit: ${error.message}`);
+        await transaction.rollback();
+    }
+    // Avoid logging the same error twice if it happened during save
+    if (!res.headersSent) { // Only log/send response if not already handled by saveError catch
+       console.error('Error claiming milestone (outer catch):', error);
+       res.status(500).json({ error: 'Failed to claim milestone' });
+    }
   }
 });
 

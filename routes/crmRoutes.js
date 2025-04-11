@@ -40,6 +40,7 @@ router.get('/messages', authenticateToken, async (req, res) => {
         message_id: message.id,
         title: message.title,
         content: message.content,
+        image_url: message.image_url,
         sender_name: senderCharacter ? senderCharacter.name : 'System',
         sender_title: senderCharacter ? senderCharacter.title : null,
         sender_avatar_data: senderCharacter ? senderCharacter.avatar_data : null,
@@ -106,6 +107,7 @@ router.get('/messages/:id', authenticateToken, async (req, res) => {
       message_id: message.id,
       title: message.title,
       content: message.content,
+      image_url: message.image_url,
       sender_name: senderCharacter ? senderCharacter.name : 'System',
       sender_title: senderCharacter ? senderCharacter.title : null,
       sender_avatar_data: message.senderCharacter ? message.senderCharacter.avatar_data : null,
@@ -601,7 +603,7 @@ router.post('/admin/messages', validateAdmin, async (req, res) => {
   try {
     const {
       title, content, character_id, message_type, task_id, task_data,
-      reward_type, reward_amount, trigger_type, trigger_data, segment_data, active
+      reward_type, reward_amount, trigger_type, trigger_data, segment_data, active, image_url
     } = req.body;
     
     if (!title || !content) {
@@ -643,6 +645,7 @@ router.post('/admin/messages', validateAdmin, async (req, res) => {
       trigger_type,
       trigger_data,
       segment_data,
+      image_url,
       active: active !== undefined ? active : true
     });
     
@@ -659,7 +662,7 @@ router.put('/admin/messages/:id', validateAdmin, async (req, res) => {
     const messageId = req.params.id;
     const {
       title, content, character_id, message_type, task_id, task_data,
-      reward_type, reward_amount, trigger_type, trigger_data, segment_data, active
+      reward_type, reward_amount, trigger_type, trigger_data, segment_data, active, image_url
     } = req.body;
     
     const message = await db.CRMMessage.findByPk(messageId);
@@ -672,6 +675,7 @@ router.put('/admin/messages/:id', validateAdmin, async (req, res) => {
     if (title) message.title = title;
     if (content) message.content = content;
     if (character_id !== undefined) message.character_id = character_id;
+    if (image_url !== undefined) message.image_url = image_url;
     if (message_type) {
       const validMessageTypes = ['INFO', 'TASK', 'REWARD'];
       if (!validMessageTypes.includes(message_type)) {
