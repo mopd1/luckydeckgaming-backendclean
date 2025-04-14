@@ -5,6 +5,8 @@ if (process.env.NODE_ENV !== 'production') {
     console.log('JWT_REFRESH_SECRET is set:', !!process.env.JWT_REFRESH_SECRET);
 }
 
+const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const cors = require('cors');
 const { corsOptions } = require('./config/cors');
@@ -15,6 +17,7 @@ const WebSocketServer = require('./src/websocket/WebSocketServer');
 const helmet = require('helmet');
 const port = process.env.PORT || 3000;
 const passport = require('passport');
+const assetsRouter = require('./routes/assets');
 const dailyTaskRoutes = require('./routes/dailyTaskRoutes');
 const seasonPassRoutes = require('./routes/seasonPassRoutes');
 const { scheduleSeasonCreation } = require('./utils/seasonAutoCreation');
@@ -142,6 +145,7 @@ app.get('/health', (req, res) => {
 
 // Routes without rate limiting
 app.use('/api/auth', authRoutes);
+app.use('/api/assets', assetsRouter);
 app.use('/api/admin', adminRoutes);
 app.use('/api/games', gameRoutes);
 app.use('/api/poker', pokerRoutes);
