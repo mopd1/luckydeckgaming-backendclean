@@ -8,8 +8,24 @@ const archiver = require('archiver');
 // Base directory for assets
 const ASSETS_DIR = path.join(__dirname, '../assets');
 
+// List of categories that don't require authentication
+const publicAssetCategories = ['cards'];
+
+// Middleware to check if authentication is required for an asset category
+const conditionalAuth = (req, res, next) => {
+  const { category } = req.params;
+  
+  // Skip authentication for public asset categories
+  if (publicAssetCategories.includes(category)) {
+    return next();
+  }
+  
+  // Apply authentication for protected categories
+  return authenticateToken(req, res, next);
+};
+
 // Get asset manifest
-router.get('/manifest', authenticateToken, (req, res) => {
+router.get('/manifest', conditionalAuth, (req, res) => {
   try {
     console.log('Manifest request received');
     const manifestPath = path.join(ASSETS_DIR, 'manifest.json');
@@ -32,8 +48,8 @@ router.get('/manifest', authenticateToken, (req, res) => {
   }
 });
 
-// Get specific asset
-router.get('/:category/:assetId', authenticateToken, (req, res) => {
+// Get specific asset - uses conditional authentication
+router.get('/:category/:assetId', conditionalAuth, (req, res) => {
   try {
     const { category, assetId } = req.params;
     console.log('Asset request:', { category, assetId });
