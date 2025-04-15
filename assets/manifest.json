@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generated": "2025-04-14T13:26:34.538Z",
+  "generated": "2025-04-14T19:12:43.418Z",
   "assets": {
     "avatars": {
       "default_avatar": {
@@ -329,10 +329,10 @@
         "essential": false
       },
       "6_of_hearts": {
-        "path": "/assets/cards/6_of_hearts.png~",
-        "hash": "16cd5c3679e6069794cb80b3ac36df0370aebed023752d6a400c1c2fda4412cc",
+        "path": "/assets/cards/6_of_hearts.png",
+        "hash": "de4f49c3bef561b175e968892a2c8b31f87294e5e4d3e5ef77132af5639532ce",
         "version": "1.0.0",
-        "size": 12230,
+        "size": 613,
         "essential": false
       },
       "6_of_hearts.png": {
@@ -385,10 +385,10 @@
         "essential": false
       },
       "7_of_hearts": {
-        "path": "/assets/cards/7_of_hearts.png~",
-        "hash": "9c947fe7bfd95c704bca81aaefad23ab44a23d58d098a23203e3b1eb8c367474",
+        "path": "/assets/cards/7_of_hearts.png",
+        "hash": "31891f6d5b986fd2c881022d3f8f5c2ef18d1d92290e4a96b7a463c857b7cf6e",
         "version": "1.0.0",
-        "size": 11050,
+        "size": 600,
         "essential": false
       },
       "7_of_hearts.png": {
@@ -529,7 +529,7 @@
         "hash": "3388c95b32f86d7bdc85266ab26bf0136fc4f1b414ca09cbb0d83c0225b8c821",
         "version": "1.0.0",
         "size": 563,
-        "essential": true
+        "essential": false
       },
       "A_of_clubs.png": {
         "path": "/assets/cards/A_of_clubs.png.import",
@@ -543,7 +543,7 @@
         "hash": "8b349b6e5f980f6bbde582df649e1fca7be5fc89090f850442cbfd543ccbe585",
         "version": "1.0.0",
         "size": 614,
-        "essential": true
+        "essential": false
       },
       "A_of_diamonds.png": {
         "path": "/assets/cards/A_of_diamonds.png.import",
@@ -557,7 +557,7 @@
         "hash": "326a722c5e82fe552ad0b68849bb9f66e2d9aa6266bf0a4b59797582009a5016",
         "version": "1.0.0",
         "size": 621,
-        "essential": true
+        "essential": false
       },
       "A_of_hearts.png": {
         "path": "/assets/cards/A_of_hearts.png.import",
@@ -571,7 +571,7 @@
         "hash": "a9dd9fd8ff00e43c7a240f6731d72049c2e3ed5db35f55cf1253e2e42e292baf",
         "version": "1.0.0",
         "size": 541,
-        "essential": true
+        "essential": false
       },
       "A_of_spades.png": {
         "path": "/assets/cards/A_of_spades.png.import",
@@ -641,7 +641,7 @@
         "hash": "a5f9163d2d1246fd2a63a238e40f0d16d1bbc2849ea465e56269a4f163b8dc15",
         "version": "1.0.0",
         "size": 569,
-        "essential": true
+        "essential": false
       },
       "K_of_clubs.png": {
         "path": "/assets/cards/K_of_clubs.png.import",
@@ -655,7 +655,7 @@
         "hash": "525af1e8f65b31d891d469c6bd261be7643fe4f4d261816c59f3009e1c603677",
         "version": "1.0.0",
         "size": 615,
-        "essential": true
+        "essential": false
       },
       "K_of_diamonds.png": {
         "path": "/assets/cards/K_of_diamonds.png.import",
@@ -669,7 +669,7 @@
         "hash": "e46e3de74f3db5e183b4432063220e9c5371888548a897e6b0800077126b98c4",
         "version": "1.0.0",
         "size": 617,
-        "essential": true
+        "essential": false
       },
       "K_of_hearts.png": {
         "path": "/assets/cards/K_of_hearts.png.import",
@@ -683,7 +683,7 @@
         "hash": "ea7cf4566e2ce7939e3f9bca27568289cbe8e29bb8be0a64d95b9b8d1f457997",
         "version": "1.0.0",
         "size": 549,
-        "essential": true
+        "essential": false
       },
       "K_of_spades.png": {
         "path": "/assets/cards/K_of_spades.png.import",
@@ -760,6 +760,20 @@
         "hash": "3d395df0bdb66ec0490b421c623f9749bf91dd85372ef9af3bd506cb9df50abb",
         "version": "1.0.0",
         "size": 774,
+        "essential": false
+      },
+      "6_of_hearts~": {
+        "path": "/assets/cards/6_of_hearts.png~",
+        "hash": "16cd5c3679e6069794cb80b3ac36df0370aebed023752d6a400c1c2fda4412cc",
+        "version": "1.0.0",
+        "size": 12230,
+        "essential": false
+      },
+      "7_of_hearts~": {
+        "path": "/assets/cards/7_of_hearts.png~",
+        "hash": "9c947fe7bfd95c704bca81aaefad23ab44a23d58d098a23203e3b1eb8c367474",
+        "version": "1.0.0",
+        "size": 11050,
         "essential": false
       }
     },
@@ -858,10 +872,10 @@
         "essential": false
       },
       "8-bitanco.ttf": {
-        "path": "/assets/fonts/8-bitanco.ttf.import",
-        "hash": "d76de221853dbd43b43612d4e66f6f936e5ded2e8d7db36bb572e70c210c8077",
+        "path": "/assets/fonts/8-bitanco.ttf",
+        "hash": "7c417f7b1a24374c3eba7fcf6b9a6eb1fc0a8781c9acf6108d65183d992e0df3",
         "version": "1.0.0",
-        "size": 706,
+        "size": 26412,
         "essential": false
       },
       "Dico": {
@@ -872,10 +886,10 @@
         "essential": false
       },
       "Dico.ttf": {
-        "path": "/assets/fonts/Dico.ttf.import",
-        "hash": "945b5a25a8319fe8579b8e0cb7a28e09ccf431faf553cefdf0db5df648622738",
+        "path": "/assets/fonts/Dico.ttf",
+        "hash": "66e99c17d222af906ee0eda4534c95a0c8f8eb487f6ac2f4da99193f7dbeffd1",
         "version": "1.0.0",
-        "size": 692,
+        "size": 15192,
         "essential": false
       },
       "DigitalNumbers-Regular": {
@@ -886,10 +900,10 @@
         "essential": false
       },
       "DigitalNumbers-Regular.ttf": {
-        "path": "/assets/fonts/DigitalNumbers-Regular.ttf.import",
-        "hash": "44c54a6a1397352f6dfdd59c235dcbf500d4439ff881827d203977fe66123416",
+        "path": "/assets/fonts/DigitalNumbers-Regular.ttf",
+        "hash": "de9e0cfb83bc10ac6fad876f35d8f381a3ff07f5ca9925919e9d32f980bc9d49",
         "version": "1.0.0",
-        "size": 746,
+        "size": 20984,
         "essential": false
       },
       "Flexi_IBM_VGA_True": {
@@ -900,10 +914,10 @@
         "essential": false
       },
       "Flexi_IBM_VGA_True.ttf": {
-        "path": "/assets/fonts/Flexi_IBM_VGA_True.ttf.import",
-        "hash": "2198ea0d70b80a2835c326a41b38de4b50da70bc44d7a9816893725270a7c976",
+        "path": "/assets/fonts/Flexi_IBM_VGA_True.ttf",
+        "hash": "a5e5c8093ea745358f3e17d13a04b416310560113d3af7ceb511e7171dad3425",
         "version": "1.0.0",
-        "size": 733,
+        "size": 257080,
         "essential": false
       },
       "Flexi_IBM_VGA_True_437": {
@@ -914,10 +928,10 @@
         "essential": false
       },
       "Flexi_IBM_VGA_True_437.ttf": {
-        "path": "/assets/fonts/Flexi_IBM_VGA_True_437.ttf.import",
-        "hash": "99c37948a7e48d024434bcd335a1fcca267a9f4de4394f4ebd26faae560d9639",
+        "path": "/assets/fonts/Flexi_IBM_VGA_True_437.ttf",
+        "hash": "0be061beb1127f8256328ce2c6bd75d52d81de551fe63321d726547231c93f0e",
         "version": "1.0.0",
-        "size": 746,
+        "size": 82524,
         "essential": false
       },
       "PPMondwest-Regular": {
@@ -928,10 +942,10 @@
         "essential": false
       },
       "PPMondwest-Regular.ttf": {
-        "path": "/assets/fonts/PPMondwest-Regular.ttf.import",
-        "hash": "dfef96722607b43c8fa29eb19bc4dd77b68677fe043fdfc023f1c11899c7f7c0",
+        "path": "/assets/fonts/PPMondwest-Regular.ttf",
+        "hash": "ed87cdcb90a0cf6fb11c04b6b4d97391ff8bf81180472b29aa94cf458b5535af",
         "version": "1.0.0",
-        "size": 734,
+        "size": 258948,
         "essential": false
       },
       "Perfect DOS VGA 437 Win": {
@@ -942,10 +956,10 @@
         "essential": false
       },
       "Perfect DOS VGA 437 Win.ttf": {
-        "path": "/assets/fonts/Perfect DOS VGA 437 Win.ttf.import",
-        "hash": "bb3549e4cee1b05e3ed86d5cfbebfb880b1d1f6dac79adcb3d75862dec021b19",
+        "path": "/assets/fonts/Perfect DOS VGA 437 Win.ttf",
+        "hash": "7462d98421919395fb21f4915ed975b4b3d88dec51d3ad1f27b780fa4564ed7d",
         "version": "1.0.0",
-        "size": 748,
+        "size": 82676,
         "essential": false
       },
       "RussoOne-Regular": {
@@ -956,10 +970,10 @@
         "essential": false
       },
       "RussoOne-Regular.ttf": {
-        "path": "/assets/fonts/RussoOne-Regular.ttf.import",
-        "hash": "f4b4f64035477af047bc50d1ed811300277b377f2b7cb9318f8019c7ac8d76fc",
+        "path": "/assets/fonts/RussoOne-Regular.ttf",
+        "hash": "ba5a79c9a716c4c6cbf88539bbbcd6a60412d4e4b7b9362a252b575e80e6d87a",
         "version": "1.0.0",
-        "size": 728,
+        "size": 37480,
         "essential": false
       },
       "Satisfy-Regular": {
@@ -970,10 +984,10 @@
         "essential": false
       },
       "Satisfy-Regular.ttf": {
-        "path": "/assets/fonts/Satisfy-Regular.ttf.import",
-        "hash": "b594a89570f8fb76d6a891a724b692bc3fdf36b45b9f7eab9f6bc2d506d3ae54",
+        "path": "/assets/fonts/Satisfy-Regular.ttf",
+        "hash": "db0fc4a5d91d36a522c1deaa4e286ff9889960404d600756476f7c7deb1c9b7c",
         "version": "1.0.0",
-        "size": 724,
+        "size": 47928,
         "essential": false
       },
       "porter-sans-inline-block": {
@@ -984,10 +998,10 @@
         "essential": false
       },
       "porter-sans-inline-block.ttf": {
-        "path": "/assets/fonts/porter-sans-inline-block.ttf.import",
-        "hash": "241de3f76bbb219f9b227211139ba7a4704963ff47ca6c9240489224a8ea3769",
+        "path": "/assets/fonts/porter-sans-inline-block.ttf",
+        "hash": "18e09b9a4c38f10e0d5ccb24810fe68c9650e790a1acdf77e4c3bd04a820a8bf",
         "version": "1.0.0",
-        "size": 752,
+        "size": 138652,
         "essential": false
       }
     },
@@ -1848,6 +1862,824 @@
         "hash": "7f575e76a344b2d44b77b3e800c093fe75c670ec92046ae8b5b37b21d5b19c07",
         "version": "1.0.0",
         "size": 777,
+        "essential": false
+      }
+    },
+    "CRM_characters": {
+      "default_avatar": {
+        "path": "/assets/CRM_characters/default_avatar.png",
+        "hash": "87f702806cbe00ff92d18af8341932396865f7f6d25232e6d6033fae542587f8",
+        "version": "1.0.0",
+        "size": 1730055,
+        "essential": false
+      },
+      "lroy_davis": {
+        "path": "/assets/CRM_characters/lroy_davis.png",
+        "hash": "f1d38e5b5716fda4c68ec797dc118dbdf77cf65832f523e6b6efea5e5563f2a3",
+        "version": "1.0.0",
+        "size": 1493400,
+        "essential": false
+      },
+      "ricky_bellavance": {
+        "path": "/assets/CRM_characters/ricky_bellavance.png",
+        "hash": "5d6349e5b0908a98def1041917d7592f2c19136ada58f0954bd9f5258e6eb5d1",
+        "version": "1.0.0",
+        "size": 1716686,
+        "essential": false
+      }
+    },
+    "CRM_images": {
+      "jetski": {
+        "path": "/assets/CRM_images/jetski.png",
+        "hash": "8828e33fc03d8d9aba81b4d0d9dd47a153c69a01d9e19bb013f31a82f4fabbab",
+        "version": "1.0.0",
+        "size": 22105,
+        "essential": false
+      }
+    },
+    "avatars/clothing": {},
+    "avatars/eyebrows": {
+      "eyebrows1": {
+        "path": "/assets/avatars/eyebrows/eyebrows1.png",
+        "hash": "fdbbd339107af0755f38d340e7193ae225806e598960f0995ced4e8361ab3d95",
+        "version": "1.0.0",
+        "size": 462,
+        "essential": false
+      }
+    },
+    "avatars/eyes": {
+      "eyes1": {
+        "path": "/assets/avatars/eyes/eyes1.png",
+        "hash": "07d1fed67659708546047c60faf7183b70bcb0c04ed0168d0e54eb87d4d8f45f",
+        "version": "1.0.0",
+        "size": 611,
+        "essential": false
+      },
+      "eyes2": {
+        "path": "/assets/avatars/eyes/eyes2.png",
+        "hash": "1efcdea384032bb8220c731a8b6e69c189593f77cfb36aaaaaaac427cc7083ef",
+        "version": "1.0.0",
+        "size": 606,
+        "essential": false
+      },
+      "glasses1": {
+        "path": "/assets/avatars/eyes/glasses1.png",
+        "hash": "456b6d39f9387aaa10d4b37c92752cbccc0cdecb7c6991623aa7e6b58330deb8",
+        "version": "1.0.0",
+        "size": 657,
+        "essential": false
+      }
+    },
+    "avatars/face": {
+      "face2": {
+        "path": "/assets/avatars/face/face2.png",
+        "hash": "991124fd4be5afe62e4f647ba8148d0435f0adfdce2af41b06164db902ad3507",
+        "version": "1.0.0",
+        "size": 1860,
+        "essential": false
+      },
+      "mouth1": {
+        "path": "/assets/avatars/face/mouth1.png",
+        "hash": "621b561931aa9655bbf26586b7ee473cfd741ed41d0d0e4ffaf636ddec647b13",
+        "version": "1.0.0",
+        "size": 496,
+        "essential": false
+      },
+      "nose1": {
+        "path": "/assets/avatars/face/nose1.png",
+        "hash": "e678a6e4ae22cb247b8eb520ad7e0ad660c0bea337940c4d3eae5ac83d499816",
+        "version": "1.0.0",
+        "size": 708,
+        "essential": false
+      },
+      "nose2": {
+        "path": "/assets/avatars/face/nose2.png",
+        "hash": "1c99d72fdd4d44286a4b06927c061a8d4ce8267aa2f97bd1dcf8f850cf6f981a",
+        "version": "1.0.0",
+        "size": 648,
+        "essential": false
+      }
+    },
+    "avatars/hair": {
+      "hair1": {
+        "path": "/assets/avatars/hair/hair1.png",
+        "hash": "296844f5e8c4ee542f13cbda85c454df2913db05359336b08b81c2c03bf06688",
+        "version": "1.0.0",
+        "size": 1275,
+        "essential": false
+      }
+    },
+    "avatars/mouth": {
+      "mouth1": {
+        "path": "/assets/avatars/mouth/mouth1.png",
+        "hash": "621b561931aa9655bbf26586b7ee473cfd741ed41d0d0e4ffaf636ddec647b13",
+        "version": "1.0.0",
+        "size": 496,
+        "essential": false
+      }
+    },
+    "avatars/nose": {
+      "nose1": {
+        "path": "/assets/avatars/nose/nose1.png",
+        "hash": "e678a6e4ae22cb247b8eb520ad7e0ad660c0bea337940c4d3eae5ac83d499816",
+        "version": "1.0.0",
+        "size": 708,
+        "essential": false
+      },
+      "nose2": {
+        "path": "/assets/avatars/nose/nose2.png",
+        "hash": "1c99d72fdd4d44286a4b06927c061a8d4ce8267aa2f97bd1dcf8f850cf6f981a",
+        "version": "1.0.0",
+        "size": 648,
+        "essential": false
+      }
+    },
+    "avatars/sunglasses": {
+      "sunglasses1": {
+        "path": "/assets/avatars/sunglasses/sunglasses1.png",
+        "hash": "ff93571daf03e99734020d31d8a83729ec7f083c0f6b0a573feee88f665ef6a3",
+        "version": "1.0.0",
+        "size": 789,
+        "essential": false
+      },
+      "sunglasses2": {
+        "path": "/assets/avatars/sunglasses/sunglasses2.png",
+        "hash": "8165c42e7abb60ebf3e8aaab8ce17bc3acfa3fe7ff39dec0e76695bfccbc6c91",
+        "version": "1.0.0",
+        "size": 1240,
+        "essential": false
+      },
+      "wiseguys": {
+        "path": "/assets/avatars/sunglasses/wiseguys.png",
+        "hash": "c923599d1c16af3593b89be8c6c0b4f803d3cdb059be86c258f430a287cb62b7",
+        "version": "1.0.0",
+        "size": 9369,
+        "essential": false
+      }
+    },
+    "table": {
+      "100000chip": {
+        "path": "/assets/table/100000chip.png",
+        "hash": "aced266051454101d1bcec32dd04df2b8b0a490abbc1f225bdfc37246a700cda",
+        "version": "1.0.0",
+        "size": 1985,
+        "essential": false
+      },
+      "10000chip": {
+        "path": "/assets/table/10000chip.png",
+        "hash": "6cf2d15161aa844a5a33ba2f7007a71f6e816fdf02f2676676b0323c25a7de46",
+        "version": "1.0.0",
+        "size": 1953,
+        "essential": false
+      },
+      "1000chip": {
+        "path": "/assets/table/1000chip.png",
+        "hash": "d6ff11de7d8d8d99e20c1ea411181e31e32a5c463f12f404ec3048b25a51a760",
+        "version": "1.0.0",
+        "size": 1860,
+        "essential": false
+      },
+      "100chip": {
+        "path": "/assets/table/100chip.png",
+        "hash": "6ef20a812a70521275f5516622af5867527626011951e69f659fc7a2db7382ae",
+        "version": "1.0.0",
+        "size": 1041,
+        "essential": false
+      },
+      "10chip": {
+        "path": "/assets/table/10chip.png",
+        "hash": "df25ba0db84624034253c3af9bd533f6e43249af19108320367bf5f14d9b6239",
+        "version": "1.0.0",
+        "size": 978,
+        "essential": false
+      },
+      "20000chip": {
+        "path": "/assets/table/20000chip.png",
+        "hash": "aced266051454101d1bcec32dd04df2b8b0a490abbc1f225bdfc37246a700cda",
+        "version": "1.0.0",
+        "size": 1985,
+        "essential": false
+      },
+      "2000chip": {
+        "path": "/assets/table/2000chip.png",
+        "hash": "cf5a55e21a38697eb736f431fae6fd4884d30ebedbd14df9ae8aa2811486b9dc",
+        "version": "1.0.0",
+        "size": 45836,
+        "essential": false
+      },
+      "500chip": {
+        "path": "/assets/table/500chip.png",
+        "hash": "59d78405115ce1b1c84370683217b52ce6dede8f1ff6ee44a2d9b4a61d0b99f7",
+        "version": "1.0.0",
+        "size": 1097,
+        "essential": false
+      },
+      "50chip": {
+        "path": "/assets/table/50chip.png",
+        "hash": "1eba843c4595f0aaf67c164a058f6cad39733452caf15ed26ccbb5e3ec4b3cca",
+        "version": "1.0.0",
+        "size": 989,
+        "essential": false
+      },
+      "5chip": {
+        "path": "/assets/table/5chip.png",
+        "hash": "8fa6acfdcb843b31c03e33cf62c0270364eed578fe13272a646a2c887f4130bb",
+        "version": "1.0.0",
+        "size": 977,
+        "essential": false
+      },
+      "craps_table": {
+        "path": "/assets/table/craps_table.png",
+        "hash": "e3ae2b6212d6cf143b956cad787488b34456da6a9715878465960546b279736c",
+        "version": "1.0.0",
+        "size": 588013,
+        "essential": false
+      },
+      "dealer_button": {
+        "path": "/assets/table/dealer_button.png",
+        "hash": "a1ff6d5d27b6254841a2b8cd28872f3071848bd7293f028066a2b8d3e7e139d8",
+        "version": "1.0.0",
+        "size": 1842,
+        "essential": false
+      }
+    },
+    "ui/BlackjackSceneUI": {
+      "$": {
+        "path": "/assets/ui/BlackjackSceneUI/$.png",
+        "hash": "4ea7c155f8ee47d11972f8e5d0fd5d118f5e5c04367df85de1319ad89acdfa39",
+        "version": "1.0.0",
+        "size": 285,
+        "essential": false
+      },
+      "Blackjack Table_greentop-snakeskinborder": {
+        "path": "/assets/ui/BlackjackSceneUI/Blackjack Table_greentop-snakeskinborder.png",
+        "hash": "2de7b3101b2ceea7f0e0e179565b54d9035b1ebb46ebcf988641c250b067730d",
+        "version": "1.0.0",
+        "size": 36398,
+        "essential": false
+      },
+      "BlackjackBox": {
+        "path": "/assets/ui/BlackjackSceneUI/BlackjackBox.png",
+        "hash": "ef97db17dbd0c04344d03f39d6cbbe507a3bdb537771d2eead9cee95e58c293e",
+        "version": "1.0.0",
+        "size": 1124,
+        "essential": false
+      },
+      "BlackjackSreakFill": {
+        "path": "/assets/ui/BlackjackSceneUI/BlackjackSreakFill.png",
+        "hash": "55d072d2f732517e64e8c8efb14d1594ee899d441e9ed3ec9641c7b6782ddee2",
+        "version": "1.0.0",
+        "size": 1074,
+        "essential": false
+      },
+      "BlackjackStreakEmpty": {
+        "path": "/assets/ui/BlackjackSceneUI/BlackjackStreakEmpty.png",
+        "hash": "ad3fd812782671edb723d1f5932d32241c645f1a71151ec6544c91975edd3890",
+        "version": "1.0.0",
+        "size": 479,
+        "essential": false
+      },
+      "DealButton=Default": {
+        "path": "/assets/ui/BlackjackSceneUI/DealButton=Default.png",
+        "hash": "8554cc24ce3bc0b57c2a75650c4fb7cc0ec623fd40590c2287840e172f6350ee",
+        "version": "1.0.0",
+        "size": 4461,
+        "essential": false
+      },
+      "DealButton=Pressed": {
+        "path": "/assets/ui/BlackjackSceneUI/DealButton=Pressed.png",
+        "hash": "62eec45e9a1a01033cf0ede3d90010a6d662803ef0c7873646103cb2822f76cd",
+        "version": "1.0.0",
+        "size": 4409,
+        "essential": false
+      },
+      "DoubleButton": {
+        "path": "/assets/ui/BlackjackSceneUI/DoubleButton.png",
+        "hash": "0ba747aca6cc6b96d23cc62992eb8ce3b38aad2060c8970d3ffbf3f3a20a6cab",
+        "version": "1.0.0",
+        "size": 4631,
+        "essential": false
+      },
+      "HitButton": {
+        "path": "/assets/ui/BlackjackSceneUI/HitButton.png",
+        "hash": "6cb6fd11d9e019c39886a295d6dc68e4a9286c4e312887bbb7a20543c146bff0",
+        "version": "1.0.0",
+        "size": 4280,
+        "essential": false
+      },
+      "SplitButton": {
+        "path": "/assets/ui/BlackjackSceneUI/SplitButton.png",
+        "hash": "b40c626bce395db6c184120717ea4dc463b16cce43769764d522948786ce1819",
+        "version": "1.0.0",
+        "size": 4661,
+        "essential": false
+      },
+      "StandButton": {
+        "path": "/assets/ui/BlackjackSceneUI/StandButton.png",
+        "hash": "55f0c9d8603fad04625dbd21323d33c7a7993119745b061d5de2afe3406cea3a",
+        "version": "1.0.0",
+        "size": 4662,
+        "essential": false
+      },
+      "Table1Image": {
+        "path": "/assets/ui/BlackjackSceneUI/Table1Image.png",
+        "hash": "6806a72c47ca5911bd9f4bc142a0f84d0d38ae044507a942fe7bb9d1594693d0",
+        "version": "1.0.0",
+        "size": 352060,
+        "essential": false
+      },
+      "Table2Image": {
+        "path": "/assets/ui/BlackjackSceneUI/Table2Image.png",
+        "hash": "d73aa528dcb2710a5650302a6037c034757474ad0e847054c8f0969e7f0dc91f",
+        "version": "1.0.0",
+        "size": 101599,
+        "essential": false
+      },
+      "Table3Image": {
+        "path": "/assets/ui/BlackjackSceneUI/Table3Image.png",
+        "hash": "663f3c9cde1927b3755423ecd52e4a989242fafb99516f47783ed9656ecfa89e",
+        "version": "1.0.0",
+        "size": 139087,
+        "essential": false
+      },
+      "Undo Button": {
+        "path": "/assets/ui/BlackjackSceneUI/Undo Button.png",
+        "hash": "8dd0e968813eaeccabf92dbd6455b2c887e0d8ca88c332f837fcc011af061028",
+        "version": "1.0.0",
+        "size": 4223,
+        "essential": false
+      },
+      "black-oval-vignette": {
+        "path": "/assets/ui/BlackjackSceneUI/black-oval-vignette.png",
+        "hash": "b0e2786e32b683a20848fd7d3b965fd4e848b8604efaa77aaa7c8fd1f3c656bb",
+        "version": "1.0.0",
+        "size": 206596,
+        "essential": false
+      },
+      "info-button-new": {
+        "path": "/assets/ui/BlackjackSceneUI/info-button-new.png",
+        "hash": "85bde94e6a2e501f981071066bfae6ea2e7acbcf75cfa9f28c8bac39fb92a822",
+        "version": "1.0.0",
+        "size": 762,
+        "essential": false
+      },
+      "player-avatar-main-section-209x110": {
+        "path": "/assets/ui/BlackjackSceneUI/player-avatar-main-section-209x110.png",
+        "hash": "00afa31ad62e18070633a38058160b094d516b130f846ee138b99479e59ca7f8",
+        "version": "1.0.0",
+        "size": 2746,
+        "essential": false
+      }
+    },
+    "ui/DailyActionUI": {
+      "ProgressBarFill": {
+        "path": "/assets/ui/DailyActionUI/ProgressBarFill.png",
+        "hash": "2243b3a084b6a3b54e4f4d69d0a8a163bad088d20895ee5ab8e0e9f8ac67ec7c",
+        "version": "1.0.0",
+        "size": 173,
+        "essential": false
+      },
+      "daily-action-watch-timer 1": {
+        "path": "/assets/ui/DailyActionUI/daily-action-watch-timer 1.png",
+        "hash": "c3cf908e5de4eef6cc2b859061a26e75d0cfffa77481d4b4a6a8c44fde92c4ec",
+        "version": "1.0.0",
+        "size": 3319,
+        "essential": false
+      },
+      "daily_action_background": {
+        "path": "/assets/ui/DailyActionUI/daily_action_background.png",
+        "hash": "8a1af22fece12213d211eaf193797b11aba1467ab5bbf50c5eb078922a4bd6f0",
+        "version": "1.0.0",
+        "size": 3330,
+        "essential": false
+      },
+      "daily_action_info": {
+        "path": "/assets/ui/DailyActionUI/daily_action_info.png",
+        "hash": "438bbc102f03ffee3a2fa2478f5465203d92062d4d252aa1eb2c94d530597c7a",
+        "version": "1.0.0",
+        "size": 770,
+        "essential": false
+      }
+    },
+    "ui/GeneralUI": {
+      "Button - General - green": {
+        "path": "/assets/ui/GeneralUI/Button - General - green.png",
+        "hash": "66793b5c87e75067e516a716af3681db48c8df7d4aedfa52be4c50d21842e138",
+        "version": "1.0.0",
+        "size": 1561,
+        "essential": false
+      },
+      "ld-daily-action-iconpng 1": {
+        "path": "/assets/ui/GeneralUI/ld-daily-action-iconpng 1.png",
+        "hash": "3d0142503f6bcf4f2c459042d06721adc5080786d5beacedbcfa6ff14fde8565",
+        "version": "1.0.0",
+        "size": 2036,
+        "essential": false
+      },
+      "ld-lobby-icon 1": {
+        "path": "/assets/ui/GeneralUI/ld-lobby-icon 1.png",
+        "hash": "a66135efc4ec159cd647140c05981152d7066c4df602689eed2260d222a606a7",
+        "version": "1.0.0",
+        "size": 1735,
+        "essential": false
+      },
+      "ld-the-book-icon 1": {
+        "path": "/assets/ui/GeneralUI/ld-the-book-icon 1.png",
+        "hash": "47184fa155af463965632ab0afeae5b042a1de29730ab54e491a9a22f5518a4a",
+        "version": "1.0.0",
+        "size": 1122,
+        "essential": false
+      },
+      "ld-the-store-icon 1": {
+        "path": "/assets/ui/GeneralUI/ld-the-store-icon 1.png",
+        "hash": "ed968c680e176da8f6f53c338e13f69f8d028f2462f4e0d4357ac8bd3b7216e0",
+        "version": "1.0.0",
+        "size": 1649,
+        "essential": false
+      },
+      "logo-test7 1": {
+        "path": "/assets/ui/GeneralUI/logo-test7 1.png",
+        "hash": "1100513ab6c59766eb43685e4e33ff2595fd4b3533f95fc7709202183dc955b0",
+        "version": "1.0.0",
+        "size": 9051,
+        "essential": false
+      },
+      "settings-icon 2": {
+        "path": "/assets/ui/GeneralUI/settings-icon 2.png",
+        "hash": "565150cbae3a8c9cca1e41496e68f9c7ca005636eaefae1c89b9c52e51d8c98c",
+        "version": "1.0.0",
+        "size": 1710,
+        "essential": false
+      }
+    },
+    "ui/Inventory": {
+      "AccessoriesButton": {
+        "path": "/assets/ui/Inventory/AccessoriesButton.png",
+        "hash": "6f37d885b2a8342931754fe4dfa963b04e5a952dbbf206523cb013435a021f92",
+        "version": "1.0.0",
+        "size": 1548,
+        "essential": false
+      },
+      "BodyButton": {
+        "path": "/assets/ui/Inventory/BodyButton.png",
+        "hash": "503c0f1c36edab4c385d7586c50bf96b539b75bb1980a478162b1d251553abe0",
+        "version": "1.0.0",
+        "size": 1086,
+        "essential": false
+      },
+      "ClothesButton": {
+        "path": "/assets/ui/Inventory/ClothesButton.png",
+        "hash": "94421bcbfeb66bb86a47e965a6a7aee36a429bda2f81af30934c773a1111c488",
+        "version": "1.0.0",
+        "size": 1319,
+        "essential": false
+      },
+      "FaceButton": {
+        "path": "/assets/ui/Inventory/FaceButton.png",
+        "hash": "c7e95057c8cd9828f8b3ae9c83301b801ce3717e6717ce8303ef80ad29047372",
+        "version": "1.0.0",
+        "size": 1065,
+        "essential": false
+      },
+      "MiscButton": {
+        "path": "/assets/ui/Inventory/MiscButton.png",
+        "hash": "51943599a4131da37c6e3cfb0e9bbd66c9e6894243a144c5953609406aa3cb91",
+        "version": "1.0.0",
+        "size": 1094,
+        "essential": false
+      },
+      "inventorybackground": {
+        "path": "/assets/ui/Inventory/inventorybackground.png",
+        "hash": "b1e699d01068dfab9a65ee8ad919117e21ed34f9e83641f6d5f980725ced24ca",
+        "version": "1.0.0",
+        "size": 4110278,
+        "essential": false
+      }
+    },
+    "ui/ItemCard": {
+      "Trading Card - 230px (1)": {
+        "path": "/assets/ui/ItemCard/Trading Card - 230px (1).png",
+        "hash": "b1724895e752d7c1e0a596e5507662e5aa33da67e94a71d0ee327f1393e31c5d",
+        "version": "1.0.0",
+        "size": 15424,
+        "essential": false
+      }
+    },
+    "ui/MainHub": {
+      "$": {
+        "path": "/assets/ui/MainHub/$.png",
+        "hash": "4ea7c155f8ee47d11972f8e5d0fd5d118f5e5c04367df85de1319ad89acdfa39",
+        "version": "1.0.0",
+        "size": 285,
+        "essential": false
+      },
+      "PokerPanelBackground1": {
+        "path": "/assets/ui/MainHub/PokerPanelBackground1.png",
+        "hash": "072d1979def1627781144420a0d34834a5466331d930a61fc9b477c0a6e90633",
+        "version": "1.0.0",
+        "size": 60084,
+        "essential": false
+      },
+      "PokerPanelBackground2": {
+        "path": "/assets/ui/MainHub/PokerPanelBackground2.png",
+        "hash": "f4332c7ef88cb46f50ddd6af792837f16d462e387dbbf8e022f4f30ce241bdb0",
+        "version": "1.0.0",
+        "size": 44403,
+        "essential": false
+      },
+      "character-background_black_220x322px 1": {
+        "path": "/assets/ui/MainHub/character-background_black_220x322px 1.png",
+        "hash": "b95d983a3ecd71fc0f431fa78e026c08712a943fe7930ae673d33ec6ac0086b3",
+        "version": "1.0.0",
+        "size": 12236,
+        "essential": false
+      },
+      "player-avatar-blank-section 1": {
+        "path": "/assets/ui/MainHub/player-avatar-blank-section 1.png",
+        "hash": "d31281c2ebed7651bac85172e97a460b45605e50ca7e24db6e0900ad942e0925",
+        "version": "1.0.0",
+        "size": 4271,
+        "essential": false
+      }
+    },
+    "ui/PackPopup": {
+      "1 item per Brown Envelope": {
+        "path": "/assets/ui/PackPopup/1 item per Brown Envelope.png",
+        "hash": "a757a4d79f55e0d47e368b2d42188c6f0a22d038a76d9df0a23d535b81d4a924",
+        "version": "1.0.0",
+        "size": 1611,
+        "essential": false
+      },
+      "20 chance of ultra rare item": {
+        "path": "/assets/ui/PackPopup/20 chance of ultra rare item.png",
+        "hash": "991875baa0785f4006204105c80117c620caa589f1da720151d1d3ad3d44beaa",
+        "version": "1.0.0",
+        "size": 1529,
+        "essential": false
+      },
+      "Pack1Button": {
+        "path": "/assets/ui/PackPopup/Pack1Button.png",
+        "hash": "2590ad44770be1457660c70add20ae32745a497a7f9f8efcda7ae2e3e90a46ad",
+        "version": "1.0.0",
+        "size": 919,
+        "essential": false
+      },
+      "Pack2Button": {
+        "path": "/assets/ui/PackPopup/Pack2Button.png",
+        "hash": "503504fc609f7ce849f75eb3e7c3e4ca318ea8b5131c3aee1be8e076aba0670a",
+        "version": "1.0.0",
+        "size": 1027,
+        "essential": false
+      },
+      "Pack3Button": {
+        "path": "/assets/ui/PackPopup/Pack3Button.png",
+        "hash": "fb64699ed84756974a74f76dc6aa09ac41147f8151dda59535206954762a7049",
+        "version": "1.0.0",
+        "size": 992,
+        "essential": false
+      },
+      "Packs-background_test_874x402": {
+        "path": "/assets/ui/PackPopup/Packs-background_test_874x402.png",
+        "hash": "1f273bd44747ee08e8fde2530f1a2dd080a2037d8b2ba046dc9211a4956047e4",
+        "version": "1.0.0",
+        "size": 192135,
+        "essential": false
+      },
+      "Star 1": {
+        "path": "/assets/ui/PackPopup/Star 1.png",
+        "hash": "c1596dcb9924fc702da5589850accfb377514d03267444004b31d404732f0361",
+        "version": "1.0.0",
+        "size": 1279,
+        "essential": false
+      },
+      "overlay-frame_packs_180x208 1": {
+        "path": "/assets/ui/PackPopup/overlay-frame_packs_180x208 1.png",
+        "hash": "b15ca090bd87b4a9bf2e1c529a91adbf0ebb25ec9ab8e6239e14bf51cb1a1abe",
+        "version": "1.0.0",
+        "size": 6754,
+        "essential": false
+      },
+      "panel_border": {
+        "path": "/assets/ui/PackPopup/panel_border.png",
+        "hash": "5907115726efca568e3e9715ff2b2290972e60b1fe7a540b754bca4874985e63",
+        "version": "1.0.0",
+        "size": 1911,
+        "essential": false
+      }
+    },
+    "ui/Pager": {
+      "close-X": {
+        "path": "/assets/ui/Pager/close-X.png",
+        "hash": "f1ae46a1385541a8cdbed997da743ecca064344bb4ed6d04ceb8344afca68b1e",
+        "version": "1.0.0",
+        "size": 155,
+        "essential": false
+      },
+      "pager-bk_690x320px": {
+        "path": "/assets/ui/Pager/pager-bk_690x320px.png",
+        "hash": "4b75a28aff1759c0a1b7e1b27f607392453d86d26bd6a3af5726962c720dc35e",
+        "version": "1.0.0",
+        "size": 1693,
+        "essential": false
+      },
+      "pager-inbox-frame": {
+        "path": "/assets/ui/Pager/pager-inbox-frame.png",
+        "hash": "3561b23bc1ecffa082da5c92e0ab06ebe47d9664a9e7ade04de4fa71aaeff3b9",
+        "version": "1.0.0",
+        "size": 1834,
+        "essential": false
+      },
+      "pager-inbox-subject-bar_v1": {
+        "path": "/assets/ui/Pager/pager-inbox-subject-bar_v1.png",
+        "hash": "23bece954eb82204db0f35ff756bf0c4e491f7881d2d1d57c13be17591ba68b5",
+        "version": "1.0.0",
+        "size": 378,
+        "essential": false
+      },
+      "pager-toplines": {
+        "path": "/assets/ui/Pager/pager-toplines.png",
+        "hash": "7ecb1101b0b164a316c2b9ae18dd56f2f8bcc6bd5d6c83c506d54695a78614b4",
+        "version": "1.0.0",
+        "size": 251,
+        "essential": false
+      }
+    },
+    "ui/PokerTableUI": {
+      "AvatarBackground": {
+        "path": "/assets/ui/PokerTableUI/AvatarBackground.png",
+        "hash": "e1953c8e239bb7d8ef6c694941636b3fe3828fd8a2572fe80616e83dfe25b406",
+        "version": "1.0.0",
+        "size": 1708,
+        "essential": false
+      },
+      "PlayerLevelBar": {
+        "path": "/assets/ui/PokerTableUI/PlayerLevelBar.png",
+        "hash": "2f875af99f9dcc025b441a5e38a616220861288846163d7ef7012f851aedd153",
+        "version": "1.0.0",
+        "size": 646,
+        "essential": false
+      },
+      "PokerTableBackground": {
+        "path": "/assets/ui/PokerTableUI/PokerTableBackground.png",
+        "hash": "34c8f529ad7c9d4dac319cdd9c1721198a4a128facbbed8b3d8efb2d82085f56",
+        "version": "1.0.0",
+        "size": 9244,
+        "essential": false
+      },
+      "PokerTableSurface": {
+        "path": "/assets/ui/PokerTableUI/PokerTableSurface.png",
+        "hash": "3d7cb31879aa18cf3db9e4de685bafa5096d2d600935a4fc5fa23158c15ed6b8",
+        "version": "1.0.0",
+        "size": 4730,
+        "essential": false
+      },
+      "PokerTableWoodBorder": {
+        "path": "/assets/ui/PokerTableUI/PokerTableWoodBorder.png",
+        "hash": "adbc835f2c000c7925bf623834484d6d31bcf0a05ebc8ee653c2e93de1e902e0",
+        "version": "1.0.0",
+        "size": 37059,
+        "essential": false
+      },
+      "RaiseBarGrabber": {
+        "path": "/assets/ui/PokerTableUI/RaiseBarGrabber.png",
+        "hash": "a7abee946b0a77ee92f992507a81a11142c1f97008248d0f0591588f8f029e3e",
+        "version": "1.0.0",
+        "size": 1758,
+        "essential": false
+      },
+      "Sitout-rectangle": {
+        "path": "/assets/ui/PokerTableUI/Sitout-rectangle.png",
+        "hash": "b78ec8595d592958d50c6c5deafcd5d3c0477260a6be67fe1ece170cc8d1c4bd",
+        "version": "1.0.0",
+        "size": 286,
+        "essential": false
+      },
+      "button-fold_blue-76x44 1 disabled": {
+        "path": "/assets/ui/PokerTableUI/button-fold_blue-76x44 1 disabled.png",
+        "hash": "aa3b9a5944bb4dd9f273c4ddb0deb267c991a5574ac5565c1600ac80ce71e69a",
+        "version": "1.0.0",
+        "size": 3690,
+        "essential": false
+      },
+      "button-fold_blue-76x44 1": {
+        "path": "/assets/ui/PokerTableUI/button-fold_blue-76x44 1.png",
+        "hash": "1b32492d96c2c184b69600ff6aaef8657576b7d2a55c2bf9b40c146c83e50642",
+        "version": "1.0.0",
+        "size": 5246,
+        "essential": false
+      },
+      "button-raise_blue-76x44 3 disabled": {
+        "path": "/assets/ui/PokerTableUI/button-raise_blue-76x44 3 disabled.png",
+        "hash": "77126e2a4c22f429851ca11d1ac6fb0d173682ded11e4244907cf233664a46b2",
+        "version": "1.0.0",
+        "size": 4195,
+        "essential": false
+      },
+      "button-raise_blue-76x44 3": {
+        "path": "/assets/ui/PokerTableUI/button-raise_blue-76x44 3.png",
+        "hash": "1928fa477de239031fbe9bd642837bc628ca85dbef38298f49e4b329fdbbd7d9",
+        "version": "1.0.0",
+        "size": 6394,
+        "essential": false
+      },
+      "opponent-avatar_opt1 1": {
+        "path": "/assets/ui/PokerTableUI/opponent-avatar_opt1 1.png",
+        "hash": "b26360255717bc04f00af25fbc39e020ce85910918237fd21c7626a109bd0ea3",
+        "version": "1.0.0",
+        "size": 10007,
+        "essential": false
+      },
+      "opponent-avatar_opt1 3": {
+        "path": "/assets/ui/PokerTableUI/opponent-avatar_opt1 3.png",
+        "hash": "14fa1390b1f4ee25280ac1c78b91d0e31104b00e7713148f874f7f7d7d51be48",
+        "version": "1.0.0",
+        "size": 9879,
+        "essential": false
+      },
+      "poker-table-gawdy-red": {
+        "path": "/assets/ui/PokerTableUI/poker-table-gawdy-red.png",
+        "hash": "b65de684df7c59a66020b5b04f4cfcac04c02a8e57f3c1f687f4684e791da64c",
+        "version": "1.0.0",
+        "size": 19422,
+        "essential": false
+      },
+      "poker-table-red-gradient": {
+        "path": "/assets/ui/PokerTableUI/poker-table-red-gradient.png",
+        "hash": "c42a021706501cb540b03df094581599f5a68e8fe01a9ddd735d95014ea4a25b",
+        "version": "1.0.0",
+        "size": 342407,
+        "essential": false
+      },
+      "pot-info-background": {
+        "path": "/assets/ui/PokerTableUI/pot-info-background.png",
+        "hash": "6e0151563844b3a657fe3ad4340ec79e90388248120d4e2f663e398e4f8ac04c",
+        "version": "1.0.0",
+        "size": 501,
+        "essential": false
+      },
+      "raise-bar-amount-box 1": {
+        "path": "/assets/ui/PokerTableUI/raise-bar-amount-box 1.png",
+        "hash": "f5ad99c871b3820c0382a0f4de33e814a09b48ed3fac3f9e14d3774f521184dc",
+        "version": "1.0.0",
+        "size": 947,
+        "essential": false
+      },
+      "raise-bar-background 1": {
+        "path": "/assets/ui/PokerTableUI/raise-bar-background 1.png",
+        "hash": "42a74aeddb86622ebb26c639e17cc0ea2d176e0d4dc57cd0916f5d0a1d9b7875",
+        "version": "1.0.0",
+        "size": 1033,
+        "essential": false
+      }
+    },
+    "ui/PurchaseScene": {
+      "ChipBorder": {
+        "path": "/assets/ui/PurchaseScene/ChipBorder.png",
+        "hash": "f1c83640d3f7e3594654a84e03365cb8c68749ffe5036b3eab477a72d1e6dbfe",
+        "version": "1.0.0",
+        "size": 3440,
+        "essential": false
+      },
+      "Stock Ticker Text": {
+        "path": "/assets/ui/PurchaseScene/Stock Ticker Text.png",
+        "hash": "3de4d60f3695c8cccb27e2aa9a0314a3851b8d08a4cdc94e6c3ca2dc39ddf358",
+        "version": "1.0.0",
+        "size": 6690,
+        "essential": false
+      },
+      "free_chips_button": {
+        "path": "/assets/ui/PurchaseScene/free_chips_button.png",
+        "hash": "915f06b52ed96899b9d12deb5b9d9810bcabff6eebfa5776cf01e679d1fd99b9",
+        "version": "1.0.0",
+        "size": 13994,
+        "essential": false
+      },
+      "inside_track_button": {
+        "path": "/assets/ui/PurchaseScene/inside_track_button.png",
+        "hash": "b7cf25e1af58bf092611d74d4ba52bab461ac32932bcbaa17e3e3a95cc30261a",
+        "version": "1.0.0",
+        "size": 13583,
+        "essential": false
+      },
+      "package_background": {
+        "path": "/assets/ui/PurchaseScene/package_background.png",
+        "hash": "ef8495115ea5eb133697a13254d1ced6310e725c6d79d0bcafb8af56d7d1003c",
+        "version": "1.0.0",
+        "size": 58204,
+        "essential": false
+      },
+      "packs_button": {
+        "path": "/assets/ui/PurchaseScene/packs_button.png",
+        "hash": "f5f640e247685b523bef1bee9e02821f0703e0dc72d50369f9d9775a4b20f9f7",
+        "version": "1.0.0",
+        "size": 14181,
+        "essential": false
+      },
+      "stockticker": {
+        "path": "/assets/ui/PurchaseScene/stockticker.png",
+        "hash": "ea422e0c96b48a54bc157c048590e1a4d525b6ca8fac3f29474312d986e3de60",
+        "version": "1.0.0",
+        "size": 841,
         "essential": false
       }
     }
