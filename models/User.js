@@ -156,6 +156,10 @@ module.exports = (sequelize, DataTypes) => {
     owned_avatar_parts: {
       type: DataTypes.JSON,
       allowNull: true
+    },
+    has_composite_avatar: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
     }
   }, {
     sequelize,

@@ -23,6 +23,7 @@ const seasonPassRoutes = require('./routes/seasonPassRoutes');
 const { scheduleSeasonCreation } = require('./utils/seasonAutoCreation');
 const packageRoutes = require('./routes/packageRoutes');
 const crmRoutes = require('./routes/crmRoutes');
+const avatarCompositeRoutes = require('./routes/avatarCompositeRoutes');
 
 // Trust nginx proxy
 if (process.env.NODE_ENV === 'production') {
@@ -146,6 +147,7 @@ app.get('/health', (req, res) => {
 // Routes without rate limiting
 app.use('/api/auth', authRoutes);
 app.use('/api/assets', assetsRouter);
+app.use('/api/avatar', avatarCompositeRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/games', gameRoutes);
 app.use('/api/poker', pokerRoutes);
