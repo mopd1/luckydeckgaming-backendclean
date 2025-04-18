@@ -6,11 +6,6 @@ module.exports = (sequelize, DataTypes) => {
   class StoreTransaction extends Model {
     static associate(models) {
       StoreTransaction.belongsTo(models.User, { foreignKey: 'user_id' });
-      StoreTransaction.belongsTo(models.AvatarPart, { foreignKey: 'part_id' });
-      StoreTransaction.belongsTo(models.RevenueTransaction, { 
-        foreignKey: 'transaction_id',
-        onDelete: 'SET NULL'
-      });
     }
   }
 

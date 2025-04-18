@@ -39,12 +39,12 @@ router.post('/purchase-package', authenticateToken, async (req, res) => {
             throw new Error('User not found.');
         }
 
-        // Update user's balances
-        const newChipBalance = user.chips + chips;
+        // Update user's balances - FIXED TO USE CORRECT FIELD NAMES
+        const newChipBalance = user.balance + chips; // Changed from user.chips to user.balance
         const newGemBalance = user.gems + gems;
 
         await user.update({
-            chips: newChipBalance,
+            balance: newChipBalance, // Changed from chips: newChipBalance to balance: newChipBalance
             gems: newGemBalance
         }, { transaction });
 

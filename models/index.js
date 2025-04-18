@@ -35,6 +35,8 @@ db.Package = require('./package')(sequelize, Sequelize.DataTypes);
 db.CRMCharacter = require('./CRMCharacter')(sequelize, DataTypes);
 db.CRMMessage = require('./CRMMessage')(sequelize, DataTypes);
 db.UserCRMMessage = require('./UserCRMMessage')(sequelize, DataTypes);
+db.StoreTransaction = require('./storetransaction')(sequelize, DataTypes);
+db.RevenueTransaction = require('./revenuetransaction')(sequelize, DataTypes);
 
 // Initialize associations
 Object.keys(db).forEach(modelName => {
