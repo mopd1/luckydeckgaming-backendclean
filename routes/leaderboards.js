@@ -1,12 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const { authenticate } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 const db = require('../models');
 const { User, DailyLeaderboard } = db;
 const { Op } = require('sequelize');
 
-// Get daily leaderboard data for a specific type
-router.get('/daily/:type', authenticate, async (req, res) => {
+router.get('/daily/:type', authenticateToken, async (req, res) => {
   try {
     const { type } = req.params;
     
@@ -98,7 +97,7 @@ router.get('/daily/:type', authenticate, async (req, res) => {
 });
 
 // Internal API to update a user's score on a leaderboard
-router.post('/daily/update', authenticate, async (req, res) => {
+router.post('/daily/update', authenticateToken, async (req, res) => {
   try {
     const { user_id, leaderboard_type, score_change } = req.body;
     
