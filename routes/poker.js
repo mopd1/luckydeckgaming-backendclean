@@ -9,6 +9,7 @@ router.get('/test', (req, res) => {
   res.json({ message: 'Poker route is working' });
 });
 
+
 // Record a completed poker hand
 router.post('/record-hand', authenticateToken, function(req, res) {
   const userId = req.user.id;
@@ -61,7 +62,37 @@ router.post('/record-hand', authenticateToken, function(req, res) {
     total_balance_before_buyin: totalBalanceBeforeBuyin,
     buyin_amount: buyinAmount
   })
-  .then(hand => {
+  .then(async hand => {
+    // Update leaderboard data if the player won chips
+    if (chipsWon > 0) {
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Find or create today's leaderboard entry for poker winnings
+        const [leaderboardEntry, created] = await db.DailyLeaderboard.findOrCreate({
+          where: {
+            user_id: userId,
+            leaderboard_type: 'poker_winnings',
+            date_period: today
+          },
+          defaults: {
+            score: chipsWon
+          }
+        });
+        
+        // If entry already exists, update the score
+        if (!created) {
+          leaderboardEntry.score += chipsWon;
+          await leaderboardEntry.save();
+        }
+        
+        console.log(`[LEADERBOARD] Updated poker_winnings leaderboard for user ${userId}. New score: ${leaderboardEntry.score}`);
+      } catch (leaderboardError) {
+        // Log error but don't fail the main request
+        console.error('[LEADERBOARD] Error updating poker_winnings leaderboard:', leaderboardError);
+      }
+    }
+
     res.status(201).json({
       success: true,
       data: hand

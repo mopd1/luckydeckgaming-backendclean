@@ -1,8 +1,10 @@
 const express = require('express');
 const router = express.Router();
+const { User, DailyLeaderboard } = require('../models');
 const { User } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
 const { checkSeasonPassProgress } = require('../utils/seasonPassUtils');
+const db = require('../models');
 
 // PUT update user settings - IMPORTANT: This specific route must come BEFORE any routes with path parameters like /:id
 router.put('/settings', authenticateToken, async (req, res) => {
@@ -217,6 +219,34 @@ router.post('/add-action-points', authenticateToken, async (req, res) => {
 
         // NEW: Check for season pass progress with the updated action points
         const newMilestones = await checkSeasonPassProgress(req.user.id, user.action_points);
+        
+        // NEW: Update leaderboard data for action points
+        try {
+            const today = new Date().toISOString().split('T')[0];
+            
+            // Find or create today's leaderboard entry
+            const [leaderboardEntry, created] = await db.DailyLeaderboard.findOrCreate({
+                where: {
+                    user_id: user.id,
+                    leaderboard_type: 'action_points',
+                    date_period: today
+                },
+                defaults: {
+                    score: amount_to_add
+                }
+            });
+            
+            // If entry already exists, update the score
+            if (!created) {
+                leaderboardEntry.score += amount_to_add;
+                await leaderboardEntry.save();
+            }
+            
+            console.log(`[LEADERBOARD] Updated action_points leaderboard for user ${user.id}. Score: ${leaderboardEntry.score}`);
+        } catch (leaderboardError) {
+            // Log error but don't fail the request
+            console.error('[LEADERBOARD] Error updating action_points leaderboard:', leaderboardError);
+        }
         
         console.log(`[INCREMENT] User ${req.user.id} action points incremented by ${amount_to_add}. New total: ${user.action_points}`);
         res.json({

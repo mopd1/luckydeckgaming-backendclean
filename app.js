@@ -24,6 +24,8 @@ const { scheduleSeasonCreation } = require('./utils/seasonAutoCreation');
 const packageRoutes = require('./routes/packageRoutes');
 const crmRoutes = require('./routes/crmRoutes');
 const avatarCompositeRoutes = require('./routes/avatarCompositeRoutes');
+const leaderboardRoutes = require('./routes/leaderboards');
+const { scheduleDailyLeaderboardReset } = require('./services/leaderboardService');
 
 // Trust nginx proxy
 if (process.env.NODE_ENV === 'production') {
@@ -167,6 +169,7 @@ console.log("!!! --- Mounting /api/season-pass with router: --- !!!", typeof sea
 app.use('/api/season-pass', seasonPassRoutes);
 app.use('/api/packages', packageRoutes);
 app.use('/api/crm', crmRoutes);
+app.use('/api/leaderboards', leaderboardRoutes);
 
 // Default routes without rate limiting
 app.use('/api', indexRoutes);
@@ -266,6 +269,12 @@ server.listen(port, '0.0.0.0', () => {
 if (process.env.NODE_ENV === 'production') {
   scheduleSeasonCreation();
 }
+
+// Start the scheduled tasks after initializing the server
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  scheduleDailyLeaderboardReset();
+});
 
 // Graceful shutdown handling
 process.on('SIGTERM', () => {

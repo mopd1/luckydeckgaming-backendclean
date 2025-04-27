@@ -5,7 +5,7 @@ const { authenticateToken } = require('../middleware/auth');
 const db = require('../models');
 
 // Record a completed blackjack hand
-router.post('/record-hand', authenticateToken, function(req, res) {
+router.post('/record-hand', authenticateToken, async function(req, res) {
   const userId = req.user.id;
   const {
     tableId,
@@ -31,40 +31,70 @@ router.post('/record-hand', authenticateToken, function(req, res) {
   console.log('Recording blackjack hand for user:', userId);
   console.log('Hand data:', req.body);
 
-  db.BlackjackHand.create({
-    user_id: userId,
-    table_id: tableId,
-    hand_number: handNumber,
-    stake_level: stakeLevel,
-    player_cards: JSON.stringify(playerCards),
-    dealer_cards: JSON.stringify(dealerCards),
-    initial_bet: initialBet,
-    insurance_bet: insuranceBet || 0,
-    outcome: outcome,
-    payout: payout,
-    doubled: doubled || false,
-    surrendered: surrendered || false,
-    split: split || false,
-    optimal_play: optimalPlay !== undefined ? optimalPlay : true,
-    running_count: runningCount || 0,
-    true_count: trueCount || 0,
-    streak_multiplier_applied: streakMultiplierApplied || false,
-    streak_count: streakCount || 0,
-    played_at: new Date()
-  })
-  .then(hand => {
+  try {
+    const hand = await db.BlackjackHand.create({
+      user_id: userId,
+      table_id: tableId,
+      hand_number: handNumber,
+      stake_level: stakeLevel,
+      player_cards: JSON.stringify(playerCards),
+      dealer_cards: JSON.stringify(dealerCards),
+      initial_bet: initialBet,
+      insurance_bet: insuranceBet || 0,
+      outcome: outcome,
+      payout: payout,
+      doubled: doubled || false,
+      surrendered: surrendered || false,
+      split: split || false,
+      optimal_play: optimalPlay !== undefined ? optimalPlay : true,
+      running_count: runningCount || 0,
+      true_count: trueCount || 0,
+      streak_multiplier_applied: streakMultiplierApplied || false,
+      streak_count: streakCount || 0,
+      played_at: new Date()
+    });
+
+    // Update leaderboard data if the player won chips (payout is positive)
+    if (payout > 0) {
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Find or create today's leaderboard entry for blackjack winnings
+        const [leaderboardEntry, created] = await db.DailyLeaderboard.findOrCreate({
+          where: {
+            user_id: userId,
+            leaderboard_type: 'blackjack_winnings',
+            date_period: today
+          },
+          defaults: {
+            score: payout
+          }
+        });
+        
+        // If entry already exists, update the score
+        if (!created) {
+          leaderboardEntry.score += payout;
+          await leaderboardEntry.save();
+        }
+        
+        console.log(`[LEADERBOARD] Updated blackjack_winnings leaderboard for user ${userId}. New score: ${leaderboardEntry.score}`);
+      } catch (leaderboardError) {
+        // Log error but don't fail the main request
+        console.error('[LEADERBOARD] Error updating blackjack_winnings leaderboard:', leaderboardError);
+      }
+    }
+
     res.status(201).json({
       success: true,
       data: hand
     });
-  })
-  .catch(error => {
+  } catch (error) {
     console.error('Error recording blackjack hand:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to record blackjack hand'
     });
-  });
+  }
 });
 
 // Get user blackjack hand history
