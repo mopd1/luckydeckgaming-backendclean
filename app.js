@@ -271,10 +271,10 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Start the scheduled tasks after initializing the server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  scheduleDailyLeaderboardReset();
-});
+//app.listen(PORT, () => {
+  //console.log(`Server running on port ${port}`);
+  //scheduleDailyLeaderboardReset();
+//});
 
 // Graceful shutdown handling
 process.on('SIGTERM', () => {

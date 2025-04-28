@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const { User, DailyLeaderboard } = require('../models');
-const { User } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
 const { checkSeasonPassProgress } = require('../utils/seasonPassUtils');
 const db = require('../models');

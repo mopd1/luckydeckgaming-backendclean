@@ -37,6 +37,7 @@ db.CRMMessage = require('./CRMMessage')(sequelize, DataTypes);
 db.UserCRMMessage = require('./UserCRMMessage')(sequelize, DataTypes);
 db.StoreTransaction = require('./storetransaction')(sequelize, DataTypes);
 db.RevenueTransaction = require('./revenuetransaction')(sequelize, DataTypes);
+db.DailyLeaderboard = require('./DailyLeaderboard')(sequelize, DataTypes);
 
 // Initialize associations
 Object.keys(db).forEach(modelName => {
