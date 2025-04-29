@@ -10,7 +10,7 @@ router.get('/daily/:type', authenticateToken, async (req, res) => {
     const { type } = req.params;
     
     // Validate leaderboard type
-    const validTypes = ['action_points', 'poker_winnings', 'blackjack_winnings'];
+    const validTypes = ['action_points', 'poker_winnings', 'blackjack_winnings', 'slot_winnings'];
     if (!validTypes.includes(type)) {
       return res.status(400).json({ error: 'Invalid leaderboard type' });
     }
@@ -106,7 +106,7 @@ router.post('/daily/update', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
-    const validTypes = ['action_points', 'poker_winnings', 'blackjack_winnings'];
+    const validTypes = ['action_points', 'poker_winnings', 'blackjack_winnings', 'slot_winnings'];
     if (!validTypes.includes(leaderboard_type)) {
       return res.status(400).json({ error: 'Invalid leaderboard type' });
     }
