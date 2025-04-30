@@ -19,6 +19,24 @@
       }
     },
     "backgrounds": {},
+    "music": {
+      "main_theme.ogg": {
+        "path": "/assets/music/main_theme.ogg",
+        "hash": "placeholder-hash",
+        "version": "1.0.0",
+        "size": 50000000,
+        "essential": true,
+        "priority": 10
+      },
+      "gameplay_theme.ogg": {
+        "path": "/assets/music/gameplay_theme.ogg",
+        "hash": "placeholder-hash", 
+        "version": "1.0.0",
+        "size": 50000000,
+        "essential": true,
+        "priority": 8
+      }
+    },
     "cards": {
       "10_of_clubs": {
         "path": "/assets/cards/10_of_clubs.png",

@@ -9,7 +9,7 @@ const archiver = require('archiver');
 const ASSETS_DIR = path.join(__dirname, '../assets');
 
 // List of categories that don't require authentication
-const publicAssetCategories = ['cards', 'avatars'];
+const publicAssetCategories = ['cards', 'avatars', 'music'];
 
 // PRODUCTION OPTIMIZATION: Add file existence cache at the top of the file
 const fileExistenceCache = new Map();
