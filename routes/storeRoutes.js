@@ -6,8 +6,24 @@ const { authenticateToken } = require('../middleware/auth');
 const { User, StoreTransaction, RevenueTransaction } = require('../models');
 const sequelize = require('../config/database'); // Corrected Import
 const { Package } = require('../models');
+const { cacheMiddleware, clearCache } = require('../middleware/cache');
 
-// Package purchase endpoint
+// Get all packages - cache for 30 minutes
+router.get('/packages', cacheMiddleware(1800), async (req, res) => {
+  try {
+    const packages = await Package.findAll({
+      where: { active: true },
+      order: [['price', 'ASC']]
+    });
+    
+    res.json(packages);
+  } catch (error) {
+    console.error('Error fetching packages:', error);
+    res.status(500).json({ error: 'Failed to fetch packages' });
+  }
+});
+
+// Package purchase endpoint - clear balance cache
 router.post('/purchase-package', authenticateToken, async (req, res) => {
     let transaction;
 
@@ -73,6 +89,10 @@ router.post('/purchase-package', authenticateToken, async (req, res) => {
 
         // Commit transaction
         await transaction.commit();
+
+        // Clear balance cache
+        await clearCache('/balance');
+        await clearCache('/packages');
 
         // Send response with updated balances
         res.json({

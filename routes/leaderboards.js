@@ -4,8 +4,10 @@ const { authenticateToken } = require('../middleware/auth');
 const db = require('../models');
 const { User, DailyLeaderboard } = db;
 const { Op } = require('sequelize');
+const { cacheMiddleware, clearCache } = require('../middleware/cache');
 
-router.get('/daily/:type', authenticateToken, async (req, res) => {
+// Get daily leaderboard data with 2-minute cache
+router.get('/daily/:type', authenticateToken, cacheMiddleware(120), async (req, res) => {
   try {
     const { type } = req.params;
     
@@ -131,6 +133,9 @@ router.post('/daily/update', authenticateToken, async (req, res) => {
       entry.score = entry.score + score_change;
       await entry.save();
     }
+    
+    // Clear relevant leaderboard caches
+    await clearCache(`/daily/${leaderboard_type}`);
     
     return res.status(200).json({ 
       success: true, 

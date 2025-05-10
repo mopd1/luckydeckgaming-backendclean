@@ -26,6 +26,7 @@ const crmRoutes = require('./routes/crmRoutes');
 const avatarCompositeRoutes = require('./routes/avatarCompositeRoutes');
 const leaderboardRoutes = require('./routes/leaderboards');
 const { scheduleDailyLeaderboardReset } = require('./services/leaderboardService');
+const { redisClient } = require('./services/redisClient');
 
 // Trust nginx proxy
 if (process.env.NODE_ENV === 'production') {
@@ -68,6 +69,22 @@ const { User } = require('./models');
 const initializePassport = require('./config/passport');
 const configuredPassport = initializePassport(User);
 app.use(configuredPassport.initialize());
+
+// Add a Redis health check route
+app.get('/health/redis', (req, res) => {
+  try {
+    redisClient.ping((err, result) => {
+      if (err) {
+        console.error('Redis health check failed:', err);
+        return res.status(500).json({ status: 'unhealthy', message: 'Redis connection failed' });
+      }
+      res.json({ status: 'healthy', redis: 'connected', result });
+    });
+  } catch (error) {
+    console.error('Redis health check error:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
 
 // Handle favicon requests
 app.get('/favicon.ico', (req, res) => {

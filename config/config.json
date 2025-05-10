@@ -19,5 +19,12 @@
     "database": "lucky_deck_gaming",
     "host": "localhost",
     "dialect": "mysql"
+  },
+  "aws": {
+    "username": "luckydeck_admin",
+    "password": "OMGunibet2025##",
+    "database": "lucky_deck_gaming",
+    "host": "luckydeck-db.c5yey0uawbfm.eu-north-1.rds.amazonaws.com",
+    "dialect": "mysql"
   }
 }

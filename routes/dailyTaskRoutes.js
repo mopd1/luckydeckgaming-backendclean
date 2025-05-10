@@ -5,9 +5,10 @@ const { authenticateToken } = require('../middleware/auth');
 const db = require('../models');
 const { Op } = require('sequelize');
 const { checkSeasonPassProgress } = require('../utils/seasonPassUtils');
+const { cacheMiddleware, clearCache } = require('../middleware/cache');
 
 // Get the current daily tasks for the user
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', authenticateToken, cacheMiddleware(300), async (req, res) => {
   try {
     const userId = req.user.id;
     console.log("Getting daily tasks for user ID:", userId);
@@ -356,16 +357,18 @@ router.put('/progress', authenticateToken, async (req, res) => {
               // Decide if you still want to mark reward_claimed = false here or handle differently
               // For now, we won't mark it claimed if the increment fails.
           }
-
         } else {
-           console.error(`   - Could not find user ${userId} to apply reward for task ${task_id}.`);
-           // Handle case where user somehow doesn't exist when trying to reward
+          console.error(`   - Could not find user ${userId} to apply reward for task ${task_id}.`);
+          // Handle case where user somehow doesn't exist when trying to reward
         }
       } // end if (isNewlyCompleted)
 
       // Save progress (this saves completed status and reward_claimed status)
       await userProgress.save();
       console.log(` - Saved UserTaskProgress for task ${task_id}, user ${userId}.`);
+
+      // ADD THIS LINE - Clear cache for the daily tasks endpoint
+      await clearCache('/');
 
       res.status(200).json({
         task_id: task_id,
@@ -957,7 +960,7 @@ router.delete('/calendar/:id', authenticateToken, async (req, res) => {
 });
 
 // Add task management routes (admin only)
-router.get('/tasks', authenticateToken, async (req, res) => {
+router.get('/tasks', authenticateToken, cacheMiddleware(3600), async (req, res) => {
   try {
     const userId = req.user.id;
     // Check if user is admin
@@ -1040,7 +1043,7 @@ router.get('/actions', authenticateToken, async (req, res) => {
 });
 
 // Get all task sets (admin only)
-router.get('/sets', authenticateToken, async (req, res) => {
+router.get('/sets', authenticateToken, cacheMiddleware(3600), async (req, res) => {
   try {
     const userId = req.user.id;
 

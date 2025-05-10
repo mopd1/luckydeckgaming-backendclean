@@ -4,9 +4,10 @@ const router = express.Router();
 const { authenticateToken, validateAdmin } = require('../middleware/auth');
 const db = require('../models');
 const { Op } = require('sequelize');
+const { cacheMiddleware, clearCache } = require('../middleware/cache');
 
 // Get all messages for the current user
-router.get('/messages', authenticateToken, async (req, res) => {
+router.get('/messages', authenticateToken, cacheMiddleware(120), async (req, res) => {
   try {
     const userId = req.user.id;
     
@@ -65,7 +66,7 @@ router.get('/messages', authenticateToken, async (req, res) => {
 });
 
 // Get a specific message by ID
-router.get('/messages/:id', authenticateToken, async (req, res) => {
+router.get('/messages/:id', authenticateToken, cacheMiddleware(300), async (req, res) => {
   try {
     const userId = req.user.id;
     const messageId = req.params.id;
@@ -159,6 +160,10 @@ router.put('/messages/:id/read', authenticateToken, async (req, res) => {
     
     userMessage.read = true;
     await userMessage.save();
+    
+    // ADD THESE LINES - Clear cache for both the messages list and the specific message
+    await clearCache('/messages');
+    await clearCache(`/messages/${messageId}`);
     
     res.status(200).json({ success: true, message: 'Message marked as read' });
   } catch (error) {
@@ -507,7 +512,7 @@ router.post('/trigger', authenticateToken, async (req, res) => {
 // ----- ADMIN ROUTES -----
 
 // Get all CRM characters (admin only)
-router.get('/admin/characters', validateAdmin, async (req, res) => {
+router.get('/admin/characters', validateAdmin, cacheMiddleware(3600), async (req, res) => {
   try {
     const characters = await db.CRMCharacter.findAll();
     res.status(200).json({ characters });
@@ -585,7 +590,7 @@ router.delete('/admin/characters/:id', validateAdmin, async (req, res) => {
 });
 
 // Get all CRM messages (admin only)
-router.get('/admin/messages', validateAdmin, async (req, res) => {
+router.get('/admin/messages', validateAdmin, cacheMiddleware(3600), async (req, res) => {
   try {
     const messages = await db.CRMMessage.findAll({
       include: [{ model: db.CRMCharacter }]

@@ -4,6 +4,7 @@ const { User } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
 const sequelize = require('../config/database');
 const { StoreTransaction } = require('../models');
+const { cacheMiddleware, clearCache } = require('../middleware/cache');
 
 // Update user's balance
 router.put('/update-chips', authenticateToken, async (req, res) => {
@@ -59,6 +60,9 @@ router.put('/update-chips', authenticateToken, async (req, res) => {
     user.balance = balance;
     await user.save();
 
+    // Clear balance cache
+    await clearCache('/balance');
+
     console.log('Balance updated successfully:', {
       userId: user.id,
       oldBalance: oldBalance,
@@ -90,8 +94,8 @@ router.put('/update-chips', authenticateToken, async (req, res) => {
   }
 });
 
-// Get user's current balance
-router.get('/balance', authenticateToken, async (req, res) => {
+// Get user's current balance - cached for 30 seconds
+router.get('/balance', authenticateToken, cacheMiddleware(30), async (req, res) => {
   console.log('Balance request received:', {
     userId: req?.user?.id,
     timestamp: new Date().toISOString()
@@ -193,6 +197,9 @@ router.post('/add-chips', authenticateToken, async (req, res) => {
       
       // Commit transaction
       await transaction.commit();
+      
+      // Clear balance cache
+      await clearCache('/balance');
       
       console.log('Chips added successfully:', {
         userId: user.id,
@@ -296,6 +303,9 @@ router.post('/subtract-chips', authenticateToken, async (req, res) => {
       
       // Commit transaction
       await transaction.commit();
+      
+      // Clear balance cache
+      await clearCache('/balance');
       
       console.log('Chips subtracted successfully:', {
         userId: user.id,
@@ -600,6 +610,9 @@ router.post('/claim-free-chips', authenticateToken, async (req, res) => {
       
       // Commit transaction
       await transaction.commit();
+      
+      // Clear balance cache
+      await clearCache('/balance');
       
       console.log('Free chips claimed successfully:', {
         userId: user.id,

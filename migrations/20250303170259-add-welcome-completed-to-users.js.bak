@@ -2,7 +2,7 @@
 
 module.exports = {
   up: async (queryInterface, Sequelize) => {
-    await queryInterface.addColumn('Users', 'welcome_completed', {
+    await queryInterface.addColumn('users', 'welcome_completed', {
       type: Sequelize.BOOLEAN,
       defaultValue: false,
       allowNull: false
@@ -10,6 +10,6 @@ module.exports = {
   },
 
   down: async (queryInterface, Sequelize) => {
-    await queryInterface.removeColumn('Users', 'welcome_completed');
+    await queryInterface.removeColumn('users', 'welcome_completed');
   }
 };
