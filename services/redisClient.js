@@ -8,7 +8,7 @@ let redisClient;
 if (process.env.NODE_ENV === 'aws') {
   // AWS ElastiCache configuration
   redisClient = new Redis({
-    host: process.env.REDIS_HOST || 'luckydeck-redis.qaiuda.0001.eun1.cache.amazonaws.com',
+    host: process.env.REDIS_HOST || 'localhost',
     port: process.env.REDIS_PORT || 6379,
     connectTimeout: 10000,
     retryStrategy: (times) => {

@@ -29,3 +29,8 @@ router.use('/friends', friendRoutes);
 router.use('/daily-tasks', dailyTaskRoutes);
 
 module.exports = router;
+
+// Health check endpoint
+router.get('/health', (req, res) => {
+  res.status(200).json({ status: 'API is healthy' });
+});

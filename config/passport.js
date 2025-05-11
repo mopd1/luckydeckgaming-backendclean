@@ -1,46 +1,45 @@
 const passport = require('passport');
-const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const crypto = require('crypto');  // Add this line
+const JwtStrategy = require('passport-jwt').Strategy;
+const { ExtractJwt } = require('passport-jwt');
 
-// Move everything into an initialization function
-function initializePassport(User) {
-    passport.serializeUser((user, done) => {
-        done(null, user.id);
-    });
-
-    passport.deserializeUser(async (id, done) => {
+module.exports = function(User) {
+  // JWT Strategy for token-based authentication
+  passport.use(
+    new JwtStrategy(
+      {
+        jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+        secretOrKey: process.env.JWT_SECRET || 'default_jwt_secret_dev_only',
+      },
+      async (jwtPayload, done) => {
         try {
-            const user = await User.findByPk(id);
-            done(null, user);
+          const user = await User.findByPk(jwtPayload.userId);
+          if (!user) {
+            return done(null, false);
+          }
+          return done(null, user);
         } catch (error) {
-            done(error, null);
+          return done(error, false);
         }
-    });
-
-    passport.use(new GoogleStrategy({
-        clientID: process.env.GOOGLE_CLIENT_ID,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        callbackURL: process.env.GOOGLE_CALLBACK_URL
-    }, async (accessToken, refreshToken, profile, done) => {
-        try {
-            let user = await User.findOne({
-                where: { google_id: profile.id }
-            });
-            if (!user) {
-                user = await User.create({
-                    google_id: profile.id,
-                    email: profile.emails[0].value,
-                    username: profile.displayName,
-                    password_hash: crypto.randomBytes(16).toString('hex') // random password for Google users
-                });
-            }
-            return done(null, user);
-        } catch (error) {
-            return done(error, null);
-        }
-    }));
-
-    return passport;
-}
-
-module.exports = initializePassport;
+      }
+    )
+  );
+  
+  // Skip Google OAuth setup for now
+  console.log('Using simplified passport configuration without Google OAuth');
+  
+  // Serialize and deserialize user
+  passport.serializeUser((user, done) => {
+    done(null, user.id);
+  });
+  
+  passport.deserializeUser(async (id, done) => {
+    try {
+      const user = await User.findByPk(id);
+      done(null, user);
+    } catch (error) {
+      done(error, false);
+    }
+  });
+  
+  return passport;
+};
