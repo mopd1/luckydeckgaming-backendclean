@@ -4,7 +4,7 @@ const { Sequelize } = require('sequelize');
 async function testConnection() {
   // Create Sequelize instance with explicit credentials
   const sequelize = new Sequelize('lucky_deck_gaming', 'luckydeck_admin', 'OMGunibet2025##', {
-    host: 'luckydeck-db.c5yey0uawbfm.eu-north-1.rds.amazonaws.com',
+    host: process.env.DB_HOST || 'luckydeck-db-uswest2.crm8qyscuo8a.us-west-2.rds.amazonaws.com',
     dialect: 'mysql'
   });
 

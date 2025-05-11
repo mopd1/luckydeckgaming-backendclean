@@ -4,11 +4,13 @@ const allowedOrigins = [
     'http://localhost:8000',
     'http://localhost:3000',
     'http://127.0.0.1:8000',
-    'http://127.0.0.1:3000',
-    'http://luckydeckbetabucket.s3-website.eu-north-1.amazonaws.com',
+    'http://127.0.0.1:3000,
     'https://dsbuibabsihko.cloudfront.net',
     'http://13.60.228.103:3000',
+    'http://luckydeckbetabucket.s3-website.eu-north-1.amazonaws.com',
     'http://ec2-13-60-228-103.eu-north-1.compute.amazonaws.com:3000',
+    'http://luckydeckbetabucket.s3-website.us-west-2.amazonaws.com',
+    'https://luckydeck-gaming-node20.eba-g65ct3bf.us-west-2.elasticbeanstalk.com',
     'http://localhost:5173',
     'http://127.0.0.1:5173'
 ];
