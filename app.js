@@ -163,6 +163,15 @@ app.get('/health', (req, res) => {
     res.status(200).json({ status: 'healthy' });
 });
 
+// Add an additional health check endpoint at /api/health for Elastic Beanstalk
+app.get('/api/health', (req, res) => {
+    res.status(200).json({ 
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV || 'development'
+    });
+});
+
 // Routes without rate limiting
 app.use('/api/auth', authRoutes);
 app.use('/api/assets', assetsRouter);
