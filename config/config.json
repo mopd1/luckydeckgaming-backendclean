@@ -24,7 +24,7 @@
     "username": "luckydeck_admin",
     "password": "OMGunibet2025##",
     "database": "lucky_deck_gaming",
-    "host": "luckydeck-db.c5yey0uawbfm.eu-north-1.rds.amazonaws.com",
+    "host": "luckydeck-db-uswest2.crm8qyscuo8a.us-west-2.rds.amazonaws.com",
     "dialect": "mysql"
   }
 }

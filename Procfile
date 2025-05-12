@@ -1,1 +1,1 @@
-web: node app.js
+web: PORT=8081 npm start
