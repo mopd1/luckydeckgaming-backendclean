@@ -416,7 +416,7 @@ router.get('/inventory', authenticateToken, cacheMiddleware(60), async (req, res
 
     const inventoryItems = await UserInventory.findAll({
       where: { user_id: userId },
-      attributes: ['id', 'item_type', 'item_id', 'quantity', 'metadata', 'created_at']
+      attributes: ['id', 'item_type', 'item_id', 'quantity', 'acquired_date', 'source', 'metadata', 'created_at']
     });
     console.log(`!!! --- Found ${inventoryItems.length} raw items --- !!!`);
 
@@ -442,6 +442,8 @@ router.get('/inventory', authenticateToken, cacheMiddleware(60), async (req, res
           item_type: 'pack',            // Standardize output type to 'pack'
           pack_type_id: packTypeId,     // Output the specific type ('envelope_pack')
           quantity: item.quantity,      // Should be 1
+          acquired_date: item.acquired_date,
+          source: item.source,
           metadata: item.metadata,      // Pass metadata through
           created_at: item.created_at   // Pass timestamp through
         };
@@ -451,11 +453,12 @@ router.get('/inventory', authenticateToken, cacheMiddleware(60), async (req, res
           id: item.item_id,           // Assuming non-packs use item_id as identifier
           item_type: item.item_type,
           quantity: item.quantity,
+          acquired_date: item.acquired_date,
+          source: item.source,
           metadata: item.metadata
         };
       }
-      // --- END REVISED CHECK ---
-    }); // End of .map()
+    });
 
     console.log(`!!! --- Mapped inventory (REVISED CHECK): ${JSON.stringify(responseInventory)} --- !!!`); // Verify the final array
 
