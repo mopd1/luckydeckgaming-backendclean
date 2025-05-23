@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { User } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
-const sequelize = require('../config/database');
+const sequelize = require('../models');
 const { StoreTransaction } = require('../models');
 const { cacheMiddleware, clearCache } = require('../middleware/cache');
 
@@ -528,9 +528,14 @@ router.post('/subtract-gems', authenticateToken, async (req, res) => {
       throw error;
     }
   } catch (error) {
-    console.error('Error subtracting gems:', {
+    console.error('Error subtracting gems - Full details:', {
       error: error.message,
       stack: error.stack,
+      code: error.code,
+      errno: error.errno,
+      sql: error.sql,
+      sqlState: error.sqlState,
+      sqlMessage: error.sqlMessage,
       userId: req?.user?.id,
       timestamp: new Date().toISOString()
     });
