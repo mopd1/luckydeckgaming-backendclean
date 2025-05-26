@@ -200,5 +200,8 @@ router.post('/purchase-package/:id', authenticateToken, async (req, res) => {
         res.status(400).json({
             success: false,
             message: error.message || 'Failed to process package purchase'
+        });
+    }
+});
 
 module.exports = router;

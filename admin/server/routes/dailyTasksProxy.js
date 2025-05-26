@@ -4,7 +4,7 @@ const axios = require('axios');
 const router = express.Router();
 
 // The base URL of your main server
-const MAIN_API_URL = 'http://localhost:3000/api/daily-tasks';
+const MAIN_API_URL = 'https://api.luckydeckgaming.com/api/daily-tasks';
 
 // Your main server's admin token
 const MAIN_API_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbi1wcm94eSIsImlzX2FkbWluIjp0cnVlLCJpYXQiOjE3NDI4NDk4MTgsImV4cCI6MTc3NDQwNzQxOH0.ZXlVG-1q4HFpXEY0A35MmefVCeuSWbrSMVFfveZSjoc';
