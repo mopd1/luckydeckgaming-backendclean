@@ -3,55 +3,76 @@ const express = require('express');
 const axios = require('axios');
 const router = express.Router();
 
-// The base URL of your main server
-const MAIN_API_URL = 'https://api.luckydeckgaming.com/api/daily-tasks';
+// Configuration via environment variables (set in AWS EB Console)
+const DAILY_TASKS_API_URL = process.env.DAILY_TASKS_API_URL || 'https://api.luckydeckgaming.com/api/daily-tasks';
+const DAILY_TASKS_API_TOKEN = process.env.DAILY_TASKS_API_TOKEN;
 
-// Your main server's admin token
-const MAIN_API_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbi1wcm94eSIsImlzX2FkbWluIjp0cnVlLCJpYXQiOjE3NDI4NDk4MTgsImV4cCI6MTc3NDQwNzQxOH0.ZXlVG-1q4HFpXEY0A35MmefVCeuSWbrSMVFfveZSjoc';
+// Validate required environment variables
+if (!DAILY_TASKS_API_TOKEN) {
+  console.error('FATAL: DAILY_TASKS_API_TOKEN environment variable is required');
+  console.error('Please set this in your AWS Elastic Beanstalk environment configuration');
+  process.exit(1);
+}
 
-// Log all requests
+// Log configuration (safely, without exposing token)
+console.log('Daily Tasks Proxy Configuration:', {
+  apiUrl: DAILY_TASKS_API_URL,
+  tokenConfigured: !!DAILY_TASKS_API_TOKEN,
+  tokenPrefix: DAILY_TASKS_API_TOKEN ? DAILY_TASKS_API_TOKEN.substring(0, 10) + '...' : 'MISSING'
+});
+
+// Request logging middleware
 router.use((req, res, next) => {
-  console.log(`Daily Tasks Proxy: ${req.method} ${req.url}`);
+  console.log(`[${new Date().toISOString()}] Daily Tasks Proxy: ${req.method} ${req.url}`);
   next();
 });
 
-// Proxy middleware - forwards all requests to the main server with admin token
+// Proxy middleware
 router.all('*', async (req, res) => {
   try {
-    // Get the path after /daily-tasks
     const path = req.url;
     
-    // Create headers with admin token for the main server
     const headers = {
-      'Authorization': `Bearer ${MAIN_API_TOKEN}`,
+      'Authorization': `Bearer ${DAILY_TASKS_API_TOKEN}`,
       'Content-Type': 'application/json'
     };
     
-    console.log(`Proxying ${req.method} request to ${MAIN_API_URL}${path}`);
+    console.log(`Proxying ${req.method} to: ${DAILY_TASKS_API_URL}${path}`);
     
-    // Forward the request with the admin token
     const response = await axios({
       method: req.method,
-      url: `${MAIN_API_URL}${path}`,
+      url: `${DAILY_TASKS_API_URL}${path}`,
       headers: headers,
-      data: ['POST', 'PUT', 'PATCH'].includes(req.method) ? req.body : undefined
+      data: ['POST', 'PUT', 'PATCH'].includes(req.method) ? req.body : undefined,
+      timeout: 30000,
+      validateStatus: () => true
     });
     
-    console.log(`Proxy response status: ${response.status}`);
+    console.log(`Proxy response: ${response.status} ${response.statusText}`);
     
-    // Send the response back to the client
     res.status(response.status).json(response.data);
-  } catch (error) {
-    console.error('Proxy error:', error.message);
     
-    // Forward error response if available
-    if (error.response) {
-      console.error('Error details:', error.response.status, error.response.data);
-      res.status(error.response.status).json(error.response.data);
+  } catch (error) {
+    console.error('Daily Tasks Proxy Error:', {
+      message: error.message,
+      code: error.code,
+      url: error.config?.url
+    });
+    
+    if (error.code === 'ETIMEDOUT') {
+      res.status(504).json({ 
+        error: 'Gateway Timeout',
+        message: 'Request to Daily Tasks API timed out'
+      });
+    } else if (error.code === 'ECONNREFUSED') {
+      res.status(503).json({
+        error: 'Service Unavailable', 
+        message: 'Cannot connect to Daily Tasks API server'
+      });
     } else {
       res.status(500).json({ 
-        error: 'Failed to proxy request',
-        message: error.message
+        error: 'Daily Tasks Proxy Error',
+        message: 'An unexpected error occurred while proxying the request'
       });
     }
   }
