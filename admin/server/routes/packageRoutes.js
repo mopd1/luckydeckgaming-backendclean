@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/userAuth'); // Use userAuth middleware
-const { Package } = require('../../../models'); // Import from main models
+const { Package } = require('../models'); // Import from main models
 const { Op } = require('sequelize');
 
 // Get all packages (for admin management)

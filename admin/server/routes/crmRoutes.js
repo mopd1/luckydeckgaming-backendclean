@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { sequelize, CRMCharacter, CRMMessage, UserCRMMessage, User, DailyTask } = require('../../../models');
+const { sequelize, CRMCharacter, CRMMessage, UserCRMMessage, User, DailyTask } = require('../models');
 const { authenticateToken } = require('../middleware/userAuth');
 const { Op } = require('sequelize');
 
