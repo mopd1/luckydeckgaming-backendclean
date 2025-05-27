@@ -12,7 +12,7 @@ const crmRoutes = require('./routes/crmRoutes');
 
 // Create Express app
 const app = express();
-const port = process.env.ADMIN_PORT || 3002;
+const port = process.env.ADMIN_PORT || 3000;
 
 // Middleware
 app.use(express.json());
@@ -56,6 +56,26 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'healthy' });
 });
 
+// Add this route for health checks
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'Lucky Deck Gaming Admin Server',
+    status: 'running',
+    port: port,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Also add a /health route at root level
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'healthy',
+    service: 'admin-server',
+    port: port,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('[Admin API Error]', err);
@@ -66,6 +86,7 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-app.listen(port, () => {
+app.listen(port, '0.0.0.0', () => {
   console.log(`Admin server running on port ${port}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
