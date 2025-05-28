@@ -1,1 +1,1 @@
-web: PORT=8081 npm start
+web: cd admin/server && npm start

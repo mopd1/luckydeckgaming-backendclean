@@ -32,6 +32,9 @@ app.use((req, res, next) => {
 const authRoutes = require('./routes/authRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 
+// Serve static files from frontend build (if exists)
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
@@ -56,8 +59,8 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'healthy' });
 });
 
-// Add this route for health checks
-app.get('/', (req, res) => {
+// Add this route for health checks when accessing /api/
+app.get('/api/', (req, res) => {
   res.json({ 
     message: 'Lucky Deck Gaming Admin Server',
     status: 'running',
@@ -74,6 +77,28 @@ app.get('/health', (req, res) => {
     port: port,
     timestamp: new Date().toISOString()
   });
+});
+
+// SPA fallback - serve index.html for any non-API routes
+app.get('*', (req, res) => {
+  // Only serve index.html for non-API routes
+  if (!req.path.startsWith('/api/')) {
+    const indexPath = path.join(__dirname, '../frontend/dist/index.html');
+    // Check if built frontend exists
+    if (require('fs').existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      // Fallback if frontend not built
+      res.json({
+        message: 'Admin Frontend Not Built',
+        instructions: 'Frontend needs to be built. Building on server...',
+        api_status: 'running',
+        timestamp: new Date().toISOString()
+      });
+    }
+  } else {
+    res.status(404).json({ error: 'API endpoint not found' });
+  }
 });
 
 // Error handling middleware
