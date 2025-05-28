@@ -6,7 +6,7 @@ const path = require('path');
 
 // Create Express app
 const app = express();
-const port = process.env.ADMIN_PORT || 3000;
+const port = process.env.ADMIN_PORT || 8081;
 
 // Middleware
 app.use(express.json());
