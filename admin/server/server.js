@@ -1,14 +1,8 @@
-// admin/server/server.js
+// admin/server/server.js - MINIMAL WORKING VERSION
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const userRoutes = require('./routes/userRoutes');
-const economyRoutes = require('./routes/economyRoutes');
-const dailyTasksProxy = require('./routes/dailyTasksProxy');
-const seasonPassAdminRoutes = require('./routes/seasonPassAdminRoutes');
-const packageRoutes = require('./routes/packageRoutes');
-const crmRoutes = require('./routes/crmRoutes');
 
 // Create Express app
 const app = express();
@@ -28,48 +22,19 @@ app.use((req, res, next) => {
   next();
 });
 
-// Import routes
-const authRoutes = require('./routes/authRoutes');
-const dashboardRoutes = require('./routes/dashboardRoutes');
-
 // Serve static files from frontend build (if exists)
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/economy', economyRoutes);
-app.use('/api/daily-tasks', dailyTasksProxy);
-app.use('/api/admin/season-pass', seasonPassAdminRoutes);
-app.use('/api/packages', packageRoutes);
-app.use('/api/crm', crmRoutes);
-
-// Placeholder for other routes that haven't been implemented yet
-app.use('/api/database', (req, res) => {
-  res.json({ message: "Database API not implemented yet" });
-});
-
-app.use('/api/config', (req, res) => {
-  res.json({ message: "Config API not implemented yet" });
-});
-
-// Health check
+// Basic health routes
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'healthy' });
-});
-
-// Add this route for health checks when accessing /api/
-app.get('/api/', (req, res) => {
   res.json({ 
-    message: 'Lucky Deck Gaming Admin Server',
-    status: 'running',
+    status: 'healthy',
+    service: 'admin-server',
     port: port,
     timestamp: new Date().toISOString()
   });
 });
 
-// Also add a /health route at root level
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'healthy',
@@ -79,20 +44,81 @@ app.get('/health', (req, res) => {
   });
 });
 
+app.get('/api/', (req, res) => {
+  res.json({ 
+    message: 'Lucky Deck Gaming Admin Server',
+    status: 'running',
+    port: port,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Placeholder routes for now
+app.use('/api/auth', (req, res) => {
+  res.json({ message: "Auth API - coming soon", timestamp: new Date().toISOString() });
+});
+
+app.use('/api/dashboard', (req, res) => {
+  res.json({ message: "Dashboard API - coming soon", timestamp: new Date().toISOString() });
+});
+
+app.use('/api/users', (req, res) => {
+  res.json({ message: "Users API - coming soon", timestamp: new Date().toISOString() });
+});
+
+app.use('/api/economy', (req, res) => {
+  res.json({ message: "Economy API - coming soon", timestamp: new Date().toISOString() });
+});
+
+app.use('/api/daily-tasks', (req, res) => {
+  res.json({ message: "Daily Tasks API - coming soon", timestamp: new Date().toISOString() });
+});
+
+app.use('/api/admin/season-pass', (req, res) => {
+  res.json({ message: "Season Pass Admin API - coming soon", timestamp: new Date().toISOString() });
+});
+
+app.use('/api/packages', (req, res) => {
+  res.json({ message: "Packages API - coming soon", timestamp: new Date().toISOString() });
+});
+
+app.use('/api/crm', (req, res) => {
+  res.json({ message: "CRM API - coming soon", timestamp: new Date().toISOString() });
+});
+
+app.use('/api/database', (req, res) => {
+  res.json({ message: "Database API - coming soon", timestamp: new Date().toISOString() });
+});
+
+app.use('/api/config', (req, res) => {
+  res.json({ message: "Config API - coming soon", timestamp: new Date().toISOString() });
+});
+
 // SPA fallback - serve index.html for any non-API routes
 app.get('*', (req, res) => {
-  // Only serve index.html for non-API routes
   if (!req.path.startsWith('/api/')) {
     const indexPath = path.join(__dirname, '../frontend/dist/index.html');
-    // Check if built frontend exists
     if (require('fs').existsSync(indexPath)) {
       res.sendFile(indexPath);
     } else {
-      // Fallback if frontend not built
       res.json({
-        message: 'Admin Frontend Not Built',
-        instructions: 'Frontend needs to be built. Building on server...',
+        message: 'Lucky Deck Gaming Admin Interface',
+        description: 'Frontend will be built in next deployment',
         api_status: 'running',
+        available_endpoints: [
+          '/api/health',
+          '/api/',
+          '/api/auth',
+          '/api/dashboard',
+          '/api/users',
+          '/api/economy',
+          '/api/daily-tasks',
+          '/api/admin/season-pass',
+          '/api/packages',
+          '/api/crm',
+          '/api/database',
+          '/api/config'
+        ],
         timestamp: new Date().toISOString()
       });
     }
@@ -114,4 +140,5 @@ app.use((err, req, res, next) => {
 app.listen(port, '0.0.0.0', () => {
   console.log(`Admin server running on port ${port}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log('Server started successfully - no database dependencies');
 });
