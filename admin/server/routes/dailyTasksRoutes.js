@@ -6,6 +6,46 @@ const { authenticateToken } = require('../middleware/auth');
 const db = require('../models');
 const { DailyTask, TaskAction, TaskSet, User, UserTaskProgress, TaskCalendar, TaskSetTasks } = db;
 
+// Debug endpoint to check database tables
+router.get('/debug', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const user = await User.findByPk(userId);
+    if (!user || !user.is_admin) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    // Check all tables
+    const taskActionsCount = await TaskAction.count();
+    const dailyTasksCount = await DailyTask.count();
+    const taskSetsCount = await TaskSet.count();
+
+    // Get sample data
+    const sampleActions = await TaskAction.findAll({ limit: 5 });
+    const sampleTasks = await DailyTask.findAll({ limit: 5 });
+
+    res.status(200).json({
+      counts: {
+        task_actions: taskActionsCount,
+        daily_tasks: dailyTasksCount,
+        task_sets: taskSetsCount
+      },
+      samples: {
+        task_actions: sampleActions,
+        daily_tasks: sampleTasks
+      },
+      message: 'Debug info retrieved successfully'
+    });
+  } catch (error) {
+    console.error('Error in debug endpoint:', error);
+    res.status(500).json({ 
+      error: 'Debug endpoint failed',
+      details: error.message,
+      stack: error.stack
+    });
+  }
+});
+
 // Get all task actions (for dropdown)
 router.get('/actions', authenticateToken, async (req, res) => {
   try {
@@ -18,10 +58,13 @@ router.get('/actions', authenticateToken, async (req, res) => {
     const actions = await TaskAction.findAll({
       order: [['name', 'ASC']]
     });
+    
+    console.log(`[DEBUG] Found ${actions.length} task actions`);
+    
     res.status(200).json({ actions });
   } catch (error) {
     console.error('Error fetching task actions:', error);
-    res.status(500).json({ error: 'Failed to fetch task actions' });
+    res.status(500).json({ error: 'Failed to fetch task actions', details: error.message });
   }
 });
 
