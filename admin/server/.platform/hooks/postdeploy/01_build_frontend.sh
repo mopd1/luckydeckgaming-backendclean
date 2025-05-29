@@ -1,38 +1,68 @@
 #!/bin/bash
 set -e
 
-echo "Starting frontend build process..."
+echo "=== Starting Frontend Build Process ==="
 echo "Current directory: $(pwd)"
-echo "Directory contents:"
-ls -la
+echo "Current user: $(whoami)"
+echo "Node version: $(node --version)"
+echo "NPM version: $(npm --version)"
 
-# Check if we're in the right location
-if [ -d "/var/app/current/admin/frontend" ]; then
-    echo "Found admin/frontend directory"
-    cd /var/app/current/admin/frontend
-elif [ -d "frontend" ]; then
-    echo "Found frontend directory in current path"
-    cd frontend
-elif [ -d "../frontend" ]; then
-    echo "Found frontend directory one level up"
-    cd ../frontend
+# Navigate to frontend directory
+FRONTEND_DIR="/var/app/current/admin/frontend"
+echo "Looking for frontend directory at: $FRONTEND_DIR"
+
+if [ -d "$FRONTEND_DIR" ]; then
+    echo "✓ Found admin frontend directory"
+    cd "$FRONTEND_DIR"
+    echo "Current directory after cd: $(pwd)"
+    echo "Directory contents:"
+    ls -la
 else
-    echo "ERROR: Cannot find frontend directory"
-    echo "Searching for frontend directories:"
-    find /var/app/current -name "frontend" -type d 2>/dev/null || echo "No frontend directories found"
+    echo "✗ ERROR: Cannot find frontend directory at: $FRONTEND_DIR"
+    echo "Available directories in /var/app/current/:"
+    ls -la /var/app/current/
+    echo "Available directories in /var/app/current/admin/:"
+    ls -la /var/app/current/admin/ 2>/dev/null || echo "No admin directory found"
     exit 1
 fi
 
-echo "Installing dependencies..."
-npm ci
+echo "=== Installing Dependencies ==="
+# Install ALL dependencies (including devDependencies needed for build)
+npm ci --include=dev
 
-echo "Building frontend..."
+echo "=== Checking if build tools are available ==="
+# Check if vite is available
+if [ -f "node_modules/.bin/vite" ]; then
+    echo "✓ Vite found at node_modules/.bin/vite"
+elif [ -f "../../node_modules/.bin/vite" ]; then
+    echo "✓ Vite found at ../../node_modules/.bin/vite"  
+else
+    echo "⚠ Vite not found, listing available binaries:"
+    ls -la node_modules/.bin/ | head -10
+fi
+
+echo "=== Building Frontend ==="
+# Run build through npm script (this will use the local vite)
 npm run build
 
-echo "Build completed successfully!"
-ls -la dist/
+if [ $? -eq 0 ]; then
+    echo "✓ Build completed successfully!"
+    
+    if [ -d "dist" ]; then
+        echo "✓ Dist directory created"
+        echo "Dist contents:"
+        ls -la dist/
+        
+        # Ensure proper permissions
+        chmod -R 755 dist/
+        echo "✓ Permissions set"
+    else
+        echo "✗ ERROR: dist directory not created"
+        exit 1
+    fi
+else
+    echo "✗ ERROR: Build failed"
+    exit 1
+fi
 
-# Ensure proper permissions
-chmod -R 755 dist/
-
-echo "Frontend build process completed!"
+echo "=== Frontend Build Process Complete ==="
