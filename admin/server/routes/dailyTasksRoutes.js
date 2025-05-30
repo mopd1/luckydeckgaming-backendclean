@@ -1,26 +1,20 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, requirePermission } = require('../middleware/auth');
 
-// Import models from the local models directory
 const db = require('../models');
-const { DailyTask, TaskAction, TaskSet, User, UserTaskProgress, TaskCalendar, TaskSetTasks } = db;
+const { DailyTask, TaskAction, TaskSet, User, UserTaskProgress, TaskCalendar, TaskSetTasks, Admin } = db;
 
-// Debug endpoint to check database tables
 router.get('/debug', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
-    const user = await User.findByPk(userId);
-    if (!user || !user.is_admin) {
+    const adminUser = req.user; 
+    if (!adminUser || (adminUser.role !== 'admin' && adminUser.role !== 'superadmin')) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    // Check all tables
     const taskActionsCount = await TaskAction.count();
     const dailyTasksCount = await DailyTask.count();
     const taskSetsCount = await TaskSet.count();
-
-    // Get sample data
     const sampleActions = await TaskAction.findAll({ limit: 5 });
     const sampleTasks = await DailyTask.findAll({ limit: 5 });
 
@@ -46,167 +40,150 @@ router.get('/debug', authenticateToken, async (req, res) => {
   }
 });
 
-// Get all task actions (for dropdown)
 router.get('/actions', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
-    const user = await User.findByPk(userId);
-    if (!user || !user.is_admin) {
-      return res.status(403).json({ error: 'Unauthorized' });
+    const adminUser = req.user;
+
+    if (!adminUser || (adminUser.role !== 'admin' && adminUser.role !== 'superadmin')) {
+      console.warn(`[DailyTasksRoutes /actions] Unauthorized access attempt by user ID: ${adminUser ? adminUser.id : 'Unknown'}, Role: ${adminUser ? adminUser.role : 'Unknown'}`);
+      return res.status(403).json({ error: 'Unauthorized - Insufficient privileges' });
     }
 
+    console.log(`[DailyTasksRoutes /actions] Admin user ID: ${adminUser.id} authorized. Fetching task actions.`);
     const actions = await TaskAction.findAll({
       order: [['name', 'ASC']]
     });
     
-    console.log(`[DEBUG] Found ${actions.length} task actions`);
-    
+    console.log(`[DailyTasksRoutes /actions] Fetched ${actions.length} task actions.`);
     res.status(200).json({ actions });
+
   } catch (error) {
-    console.error('Error fetching task actions:', error);
+    console.error('[DailyTasksRoutes /actions] Error fetching task actions:', error);
     res.status(500).json({ error: 'Failed to fetch task actions', details: error.message });
   }
 });
 
-// Get all tasks (for task list)
 router.get('/tasks', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
-    const user = await User.findByPk(userId);
-    if (!user || !user.is_admin) {
+    const adminUser = req.user;
+    if (!adminUser || (adminUser.role !== 'admin' && adminUser.role !== 'superadmin')) { 
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
     const tasks = await DailyTask.findAll({
-      include: [{ 
-        model: TaskAction,
-        attributes: ['action_id', 'name', 'description', 'tracking_event']
-      }],
-      order: [['name', 'ASC']]
+      include: [
+        { model: TaskAction, as: 'action' },
+        { model: TaskSet, as: 'taskSet' } 
+      ],
+      order: [['id', 'ASC']]
     });
     res.status(200).json({ tasks });
   } catch (error) {
-    console.error('Error fetching tasks:', error);
-    res.status(500).json({ error: 'Failed to fetch tasks' });
+    console.error('Error fetching daily tasks:', error);
+    res.status(500).json({ error: 'Failed to fetch daily tasks', details: error.message });
   }
 });
 
-// Create a new task
 router.post('/tasks', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
-    const user = await User.findByPk(userId);
-    if (!user || !user.is_admin) {
+    const adminUser = req.user;
+    if (!adminUser || (adminUser.role !== 'admin' && adminUser.role !== 'superadmin')) { 
       return res.status(403).json({ error: 'Unauthorized' });
     }
-
-    const task = await DailyTask.create(req.body);
     
-    // Fetch the created task with its associated TaskAction
-    const taskWithAction = await DailyTask.findOne({
-      where: { task_id: task.task_id },
-      include: [{ 
-        model: TaskAction,
-        attributes: ['action_id', 'name', 'description', 'tracking_event']
-      }]
-    });
+    const newTaskData = req.body; 
+    if (!newTaskData.task_id || typeof newTaskData.task_id !== 'string' || newTaskData.task_id.trim() === '') {
+        return res.status(400).json({ error: 'task_id is required and cannot be empty.' });
+    }
+    if (!newTaskData.action_id) {
+        return res.status(400).json({ error: 'action_id is required.' });
+    }
 
-    res.status(201).json(taskWithAction);
+    const newTask = await DailyTask.create(newTaskData);
+    res.status(201).json({ task: newTask });
   } catch (error) {
-    console.error('Error creating task:', error);
-    res.status(500).json({ error: 'Failed to create task' });
+    console.error('Error creating daily task:', error);
+    if (error.name === 'SequelizeValidationError' || error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(400).json({ error: 'Validation Error or Duplicate Entry', details: error.errors ? error.errors.map(e => e.message) : error.message });
+    }
+    res.status(500).json({ error: 'Failed to create daily task', details: error.message });
   }
 });
 
-// Update a task
-router.put('/tasks/:taskId', authenticateToken, async (req, res) => {
+router.put('/tasks/:id', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
-    const user = await User.findByPk(userId);
-    if (!user || !user.is_admin) {
+    const adminUser = req.user;
+    if (!adminUser || (adminUser.role !== 'admin' && adminUser.role !== 'superadmin')) { 
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    const task = await DailyTask.findOne({
-      where: { task_id: req.params.taskId }
-    });
-    
-    if (!task) {
-      return res.status(404).json({ error: 'Task not found' });
-    }
-    
-    await task.update(req.body);
-    
-    // Fetch the updated task with its associated TaskAction
-    const updatedTaskWithAction = await DailyTask.findOne({
-      where: { task_id: task.task_id },
-      include: [{ 
-        model: TaskAction,
-        attributes: ['action_id', 'name', 'description', 'tracking_event']
-      }]
-    });
+    const taskId = req.params.id; 
+    const updatedTaskData = req.body; 
 
-    res.status(200).json(updatedTaskWithAction);
+    const task = await DailyTask.findByPk(taskId);
+    if (!task) {
+      return res.status(404).json({ error: 'Daily task not found' });
+    }
+
+    await task.update(updatedTaskData);
+    res.status(200).json({ task });
   } catch (error) {
-    console.error('Error updating task:', error);
-    res.status(500).json({ error: 'Failed to update task' });
+    console.error(`Error updating daily task ${req.params.id}:`, error);
+    if (error.name === 'SequelizeValidationError') {
+      return res.status(400).json({ error: 'Validation Error', details: error.errors.map(e => e.message) });
+    }
+    res.status(500).json({ error: 'Failed to update daily task', details: error.message });
   }
 });
 
-// Delete a task
-router.delete('/tasks/:taskId', authenticateToken, async (req, res) => {
+router.delete('/tasks/:id', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
-    const user = await User.findByPk(userId);
-    if (!user || !user.is_admin) {
+    const adminUser = req.user;
+    if (!adminUser || (adminUser.role !== 'admin' && adminUser.role !== 'superadmin')) { 
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    const task = await DailyTask.findOne({
-      where: { task_id: req.params.taskId }
-    });
-    
+    const taskId = req.params.id;
+    const task = await DailyTask.findByPk(taskId);
     if (!task) {
-      return res.status(404).json({ error: 'Task not found' });
+      return res.status(404).json({ error: 'Daily task not found' });
     }
-    
+
     await task.destroy();
-    res.status(200).json({ message: 'Task deleted successfully' });
+    res.status(204).send();
   } catch (error) {
-    console.error('Error deleting task:', error);
-    res.status(500).json({ error: 'Failed to delete task' });
+    console.error(`Error deleting daily task ${req.params.id}:`, error);
+    res.status(500).json({ error: 'Failed to delete daily task', details: error.message });
   }
 });
 
-// Get all task sets
-router.get('/sets', authenticateToken, async (req, res) => {
+router.post('/populate-sample-data', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
-    const user = await User.findByPk(userId);
-    if (!user || !user.is_admin) {
-      return res.status(403).json({ error: 'Unauthorized' });
+    const adminUser = req.user;
+    if (!adminUser || (adminUser.role !== 'admin' && adminUser.role !== 'superadmin')) { 
+      return res.status(403).json({ error: 'Unauthorized to populate data' });
     }
 
-    const sets = await TaskSet.findAll({
-      include: [
-        {
-          model: DailyTask,
-          through: {
-            attributes: ['display_order']
-          },
-          include: [{ 
-            model: TaskAction,
-            attributes: ['action_id', 'name', 'description', 'tracking_event']
-          }]
-        }
-      ],
-      order: [['name', 'ASC']]
-    });
+    const actionsToCreate = [
+      { action_id: 'sample_action_1', name: 'Sample Action One', description: 'This is a sample action.', tracking_event: 'sample_event', collate: 'utf8mb4_unicode_ci' },
+      { action_id: 'sample_action_2', name: 'Sample Action Two', description: 'Another sample action.', tracking_event: 'another_event', collate: 'utf8mb4_unicode_ci' },
+    ];
 
-    res.status(200).json({ sets });
+    let createdCount = 0;
+    for (const actionData of actionsToCreate) {
+      const [action, created] = await TaskAction.findOrCreate({
+        where: { action_id: actionData.action_id },
+        defaults: actionData
+      });
+      if (created) {
+        createdCount++;
+      }
+    }
+
+    res.status(200).json({ message: `Sample data population attempt complete. ${createdCount} new task actions created.` });
   } catch (error) {
-    console.error('Error fetching task sets:', error);
-    res.status(500).json({ error: 'Failed to fetch task sets' });
+    console.error('Error in /populate-sample-data endpoint:', error);
+    res.status(500).json({ error: 'Failed to populate sample data', details: error.message });
   }
 });
 

@@ -11,6 +11,7 @@ module.exports = (sequelize, DataTypes) => {
     set_id: {
       type: DataTypes.STRING(50),
       allowNull: false,
+      collate: 'utf8mb4_unicode_ci',
       references: {
         model: 'task_sets',
         key: 'set_id'
@@ -19,6 +20,7 @@ module.exports = (sequelize, DataTypes) => {
     task_id: {
       type: DataTypes.STRING(50),
       allowNull: false,
+      collate: 'utf8mb4_unicode_ci',
       references: {
         model: 'daily_tasks',
         key: 'task_id'
@@ -31,7 +33,9 @@ module.exports = (sequelize, DataTypes) => {
     }
   }, {
     tableName: 'task_set_tasks',
-    timestamps: true
+    timestamps: true,
+    underscored: true,
+    modelName: 'TaskSetTasks'
   });
 
   return TaskSetTasks;

@@ -11,11 +11,13 @@ module.exports = (sequelize, DataTypes) => {
     task_id: {
       type: DataTypes.STRING(50),
       allowNull: false,
-      unique: true
+      unique: true,
+      collate: 'utf8mb4_unicode_ci'
     },
     action_id: {
       type: DataTypes.STRING(50),
       allowNull: false,
+      collate: 'utf8mb4_unicode_ci',
       references: {
         model: 'task_actions',
         key: 'action_id'
@@ -51,19 +53,22 @@ module.exports = (sequelize, DataTypes) => {
     }
   }, {
     tableName: 'daily_tasks',
+    modelName: 'DailyTask',
     timestamps: true
   });
 
   DailyTask.associate = function(models) {
     DailyTask.belongsTo(models.TaskAction, {
       foreignKey: 'action_id',
-      targetKey: 'action_id'
+      targetKey: 'action_id',
+      as: 'action'
     });
     DailyTask.belongsToMany(models.TaskSet, {
-      through: 'TaskSetTasks',
+      through: models.TaskSetTasks,
       foreignKey: 'task_id',
       sourceKey: 'task_id',
-      otherKey: 'set_id'
+      otherKey: 'set_id',
+      as: 'taskSet'
     });
   };
 

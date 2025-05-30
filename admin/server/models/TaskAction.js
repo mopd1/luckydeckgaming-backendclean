@@ -11,7 +11,8 @@ module.exports = (sequelize, DataTypes) => {
     action_id: {
       type: DataTypes.STRING(50),
       allowNull: false,
-      unique: true
+      unique: true,
+      collate: 'utf8mb4_unicode_ci'
     },
     name: {
       type: DataTypes.STRING(100),
