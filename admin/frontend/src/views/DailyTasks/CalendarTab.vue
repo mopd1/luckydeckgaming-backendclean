@@ -174,7 +174,7 @@ watch([currentYear, currentMonth], async () => {
 async function loadTaskSets() {
   try {
     const response = await api.get('/daily-tasks/sets')
-    taskSets.value = response.data.sets
+    taskSets.value = response.data.taskSets
   } catch (error) {
     console.error('Error loading task sets:', error)
   }

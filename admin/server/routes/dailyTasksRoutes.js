@@ -590,4 +590,135 @@ router.delete('/sets/:id/tasks/:task_id', authenticateToken, async (req, res) =>
   }
 });
 
+// =====================================
+// CALENDAR ROUTES
+// =====================================
+
+// GET /api/daily-tasks/calendar/:year/:month - Get calendar data for a specific month
+router.get('/calendar/:year/:month', authenticateToken, async (req, res) => {
+  try {
+    const adminUser = req.user;
+    if (!adminUser || (adminUser.role !== 'admin' && adminUser.role !== 'superadmin')) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const { year, month } = req.params;
+    
+    console.log(`[DailyTasksRoutes /calendar] Fetching calendar data for ${year}/${month}`);
+
+    // Get calendar assignments for the specified month
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const endDate = `${year}-${String(month).padStart(2, '0')}-31`;
+
+    const calendarAssignments = await TaskCalendar.findAll({
+      where: {
+        date: {
+          [db.Sequelize.Op.between]: [startDate, endDate]
+        }
+      },
+      include: [
+        {
+          model: TaskSet,
+          attributes: ['set_id', 'name']
+        }
+      ]
+    });
+
+    // Format calendar data as expected by frontend
+    const calendar = {};
+    calendarAssignments.forEach(assignment => {
+      calendar[assignment.date] = {
+        set_id: assignment.set_id,
+        set_name: assignment.TaskSet?.name || 'Unknown Set'
+      };
+    });
+
+    console.log(`[DailyTasksRoutes /calendar] Found ${calendarAssignments.length} calendar assignments`);
+    res.status(200).json({ calendar });
+
+  } catch (error) {
+    console.error(`[DailyTasksRoutes /calendar] Error fetching calendar data:`, error);
+    res.status(500).json({ error: 'Failed to fetch calendar data', details: error.message });
+  }
+});
+
+// POST /api/daily-tasks/calendar/set-dates - Assign a task set to specific dates
+router.post('/calendar/set-dates', authenticateToken, async (req, res) => {
+  try {
+    const adminUser = req.user;
+    if (!adminUser || (adminUser.role !== 'admin' && adminUser.role !== 'superadmin')) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const { setId, dates } = req.body;
+
+    if (!setId || !Array.isArray(dates) || dates.length === 0) {
+      return res.status(400).json({ error: 'setId and dates array are required' });
+    }
+
+    console.log(`[DailyTasksRoutes /calendar/set-dates] Assigning set ${setId} to ${dates.length} dates`);
+
+    // Verify the task set exists
+    const taskSet = await TaskSet.findOne({ where: { set_id: setId } });
+    if (!taskSet) {
+      return res.status(404).json({ error: 'Task set not found' });
+    }
+
+    // Remove existing assignments for these dates
+    await TaskCalendar.destroy({
+      where: {
+        date: {
+          [db.Sequelize.Op.in]: dates
+        }
+      }
+    });
+
+    // Create new assignments
+    const calendarAssignments = dates.map(date => ({
+      set_id: setId,
+      date: date
+    }));
+
+    await TaskCalendar.bulkCreate(calendarAssignments);
+
+    console.log(`[DailyTasksRoutes /calendar/set-dates] Successfully assigned task set to dates`);
+    res.status(201).json({ 
+      message: 'Task set assigned to dates successfully',
+      assignedDates: dates.length
+    });
+
+  } catch (error) {
+    console.error(`[DailyTasksRoutes /calendar/set-dates] Error assigning task set to dates:`, error);
+    res.status(500).json({ error: 'Failed to assign task set to dates', details: error.message });
+  }
+});
+     
+// GET /api/daily-tasks/calendar/assignments - Get all calendar assignments (optional endpoint for debugging)
+router.get('/calendar/assignments', authenticateToken, async (req, res) => {
+  try {
+    const adminUser = req.user;
+    if (!adminUser || (adminUser.role !== 'admin' && adminUser.role !== 'superadmin')) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const assignments = await TaskCalendar.findAll({
+      include: [
+        {
+          model: TaskSet,
+          as: 'taskSet',
+          attributes: ['set_id', 'name', 'description']
+        }
+      ],
+      order: [['assignment_date', 'ASC']]
+    });
+
+    console.log(`[DailyTasksRoutes /calendar/assignments] Found ${assignments.length} total assignments`);
+    res.status(200).json({ assignments });
+
+  } catch (error) {
+    console.error(`[DailyTasksRoutes /calendar/assignments] Error fetching assignments:`, error);
+    res.status(500).json({ error: 'Failed to fetch calendar assignments', details: error.message });
+  }
+});
+
 module.exports = router;
