@@ -7,57 +7,83 @@
         <v-text-field
           v-model="search"
           append-icon="mdi-magnify"
-          label="Search"
+          label="Search users..."
           single-line
           hide-details
-          @keyup.enter="getUsers"
+          clearable
+          @input="searchUsers"
+          @click:clear="clearSearch"
         ></v-text-field>
       </v-card-title>
       
-      <v-data-table
-        :headers="headers"
-        :items="users"
-        :loading="loading"
-        :server-items-length="total"
-        :items-per-page="itemsPerPage"
-        :page.sync="page"
-        @update:items-per-page="changeItemsPerPage"
-        class="elevation-1"
-      >
-        <template v-slot:item.is_active="{ item }">
-          <v-chip :color="item.is_active ? 'green' : 'red'" dark>
-            {{ item.is_active ? 'Active' : 'Inactive' }}
-          </v-chip>
-        </template>
-        
-        <template v-slot:item.account_locked="{ item }">
-          <v-chip v-if="item.account_locked" color="red" dark>Locked</v-chip>
-          <span v-else>-</span>
-        </template>
-        
-        <template v-slot:item.balance="{ item }">
-          {{ formatNumber(item.balance) }}
-        </template>
-        
-        <template v-slot:item.actions="{ item }">
-          <v-btn
-            small
-            icon
-            color="primary"
-            @click="viewUser(item)"
-          >
-            <v-icon>mdi-eye</v-icon>
-          </v-btn>
-          <v-btn
-            small
-            icon
-            color="success"
-            @click="editBalance(item)"
-          >
-            <v-icon>mdi-currency-usd</v-icon>
-          </v-btn>
-        </template>
-      </v-data-table>
+      <!-- Custom table implementation (proven pattern from Daily Tasks/Packages) -->
+      <div v-if="!loading" class="v-table v-table--density-default v-theme--dark">
+        <table>
+          <thead>
+            <tr style="background: rgba(255,255,255,0.05); height: 52px;">
+              <th style="width: 5%; padding: 16px;">ID</th>
+              <th style="width: 15%; padding: 16px;">Username</th>
+              <th style="width: 20%; padding: 16px;">Email</th>
+              <th style="width: 15%; padding: 16px;">Display Name</th>
+              <th style="width: 10%; padding: 16px;">Balance</th>
+              <th style="width: 8%; padding: 16px;">Status</th>
+              <th style="width: 8%; padding: 16px;">Locked</th>
+              <th style="width: 10%; padding: 16px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="user in users" :key="user.id" class="custom-row" style="border-bottom: 1px solid rgba(255,255,255,0.12);">
+              <td style="padding: 16px;">{{ user.id }}</td>
+              <td style="padding: 16px;">{{ user.username }}</td>
+              <td style="padding: 16px;">{{ user.email || '-' }}</td>
+              <td style="padding: 16px;">{{ user.display_name || '-' }}</td>
+              <td style="padding: 16px;">{{ formatNumber(user.balance) }}</td>
+              <td style="padding: 16px;">
+                <v-chip :color="user.is_active ? 'green' : 'red'" size="small" dark>
+                  {{ user.is_active ? 'Active' : 'Inactive' }}
+                </v-chip>
+              </td>
+              <td style="padding: 16px;">
+                <v-chip v-if="user.account_locked" color="red" size="small" dark>Locked</v-chip>
+                <span v-else>-</span>
+              </td>
+              <td style="padding: 16px;">
+                <v-btn size="small" icon color="primary" @click="viewUser(user)" class="me-1">
+                  <v-icon>mdi-eye</v-icon>
+                </v-btn>
+                <v-btn size="small" icon color="success" @click="editBalance(user)">
+                  <v-icon>mdi-currency-usd</v-icon>
+                </v-btn>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Loading state -->
+      <div v-if="loading" class="text-center pa-4">
+        <v-progress-circular indeterminate color="primary"></v-progress-circular>
+        <p class="mt-2">Loading users...</p>
+      </div>
+
+      <!-- Empty state -->
+      <div v-if="!loading && users.length === 0" class="text-center pa-4">
+        <v-icon size="64" color="grey">mdi-account-search</v-icon>
+        <p class="mt-2 text-grey">{{ search ? 'No users found matching your search' : 'No users found' }}</p>
+      </div>
+
+      <!-- Pagination -->
+      <v-card-actions v-if="!loading && total > 0">
+        <v-spacer></v-spacer>
+        <span class="text-caption me-4">{{ paginationText }}</span>
+        <v-btn :disabled="page <= 1" @click="previousPage" icon size="small">
+          <v-icon>mdi-chevron-left</v-icon>
+        </v-btn>
+        <span class="mx-2 text-caption">{{ page }} / {{ totalPages }}</span>
+        <v-btn :disabled="page >= totalPages" @click="nextPage" icon size="small">
+          <v-icon>mdi-chevron-right</v-icon>
+        </v-btn>
+      </v-card-actions>
     </v-card>
     
     <!-- Balance Edit Dialog -->
@@ -98,6 +124,11 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!-- Snackbar for notifications -->
+    <v-snackbar v-model="snackbar" :color="snackbarColor" timeout="3000">
+      {{ snackbarText }}
+    </v-snackbar>
   </v-container>
 </template>
 
@@ -114,16 +145,7 @@ export default {
       page: 1,
       itemsPerPage: 10,
       search: '',
-      headers: [
-        { text: 'ID', value: 'id', width: '5%' },
-        { text: 'Username', value: 'username', width: '15%' },
-        { text: 'Email', value: 'email', width: '20%' },
-        { text: 'Display Name', value: 'display_name', width: '15%' },
-        { text: 'Balance', value: 'balance', width: '10%' },
-        { text: 'Status', value: 'is_active', width: '8%' },
-        { text: 'Locked', value: 'account_locked', width: '8%' },
-        { text: 'Actions', value: 'actions', sortable: false, width: '10%' }
-      ],
+      searchTimeout: null,
       balanceDialog: false,
       selectedUser: {},
       balanceOperation: 'add',
@@ -132,18 +154,26 @@ export default {
         { text: 'Add Chips', value: 'add' },
         { text: 'Subtract Chips', value: 'subtract' },
         { text: 'Set Chips', value: 'set' }
-      ]
+      ],
+      snackbar: false,
+      snackbarText: '',
+      snackbarColor: 'success'
     };
+  },
+  
+  computed: {
+    totalPages() {
+      return Math.ceil(this.total / this.itemsPerPage);
+    },
+    paginationText() {
+      const start = (this.page - 1) * this.itemsPerPage + 1;
+      const end = Math.min(this.page * this.itemsPerPage, this.total);
+      return `${start}-${end} of ${this.total}`;
+    }
   },
   
   mounted() {
     this.getUsers();
-  },
-  
-  watch: {
-    page() {
-      this.getUsers();
-    }
   },
   
   methods: {
@@ -159,19 +189,45 @@ export default {
         });
         
         console.log('Users API response:', response.data);
-        this.users = response.data.users;
-        this.total = response.data.total;
+        this.users = response.data.users || [];
+        this.total = response.data.total || 0;
       } catch (error) {
         console.error('Error fetching users:', error);
-        // Show error notification
+        this.showSnackbar('Error fetching users', 'error');
       } finally {
         this.loading = false;
       }
     },
     
-    changeItemsPerPage(value) {
-      this.itemsPerPage = value;
+    searchUsers() {
+      // Debounce search to avoid too many API calls
+      if (this.searchTimeout) {
+        clearTimeout(this.searchTimeout);
+      }
+      this.searchTimeout = setTimeout(() => {
+        this.page = 1; // Reset to first page on new search
+        this.getUsers();
+      }, 500);
+    },
+    
+    clearSearch() {
+      this.search = '';
+      this.page = 1;
       this.getUsers();
+    },
+    
+    nextPage() {
+      if (this.page < this.totalPages) {
+        this.page++;
+        this.getUsers();
+      }
+    },
+    
+    previousPage() {
+      if (this.page > 1) {
+        this.page--;
+        this.getUsers();
+      }
     },
     
     viewUser(user) {
@@ -199,16 +255,46 @@ export default {
         }
         
         this.balanceDialog = false;
-        // Show success notification
+        this.showSnackbar('User balance updated successfully', 'success');
       } catch (error) {
         console.error('Error updating balance:', error);
-        // Show error notification
+        this.showSnackbar('Error updating balance', 'error');
       }
     },
     
     formatNumber(num) {
       return new Intl.NumberFormat().format(num || 0);
+    },
+    
+    showSnackbar(text, color = 'success') {
+      this.snackbarText = text;
+      this.snackbarColor = color;
+      this.snackbar = true;
     }
   }
 };
 </script>
+
+<style scoped>
+.custom-row:hover {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+.v-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.v-table th,
+.v-table td {
+  text-align: left;
+}
+
+.v-table th {
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.0892857143em;
+}
+</style>

@@ -4,10 +4,8 @@ const { sequelize, CRMCharacter, CRMMessage, UserCRMMessage, User, DailyTask } =
 const { authenticateToken } = require('../middleware/userAuth');
 const { Op } = require('sequelize');
 
-// Apply auth middleware to all routes
 router.use(authenticateToken);
 
-// Get all CRM characters
 router.get('/admin/characters', async (req, res) => {
   try {
     const characters = await CRMCharacter.findAll({
@@ -21,7 +19,6 @@ router.get('/admin/characters', async (req, res) => {
   }
 });
 
-// Get a specific character
 router.get('/admin/characters/:id', async (req, res) => {
   try {
     const character = await CRMCharacter.findByPk(req.params.id);
@@ -37,7 +34,6 @@ router.get('/admin/characters/:id', async (req, res) => {
   }
 });
 
-// Create a new character
 router.post('/admin/characters', async (req, res) => {
   try {
     const character = await CRMCharacter.create(req.body);
@@ -48,7 +44,6 @@ router.post('/admin/characters', async (req, res) => {
   }
 });
 
-// Update a character
 router.put('/admin/characters/:id', async (req, res) => {
   try {
     const character = await CRMCharacter.findByPk(req.params.id);
@@ -65,7 +60,6 @@ router.put('/admin/characters/:id', async (req, res) => {
   }
 });
 
-// Delete a character
 router.delete('/admin/characters/:id', async (req, res) => {
   try {
     const character = await CRMCharacter.findByPk(req.params.id);
@@ -82,7 +76,6 @@ router.delete('/admin/characters/:id', async (req, res) => {
   }
 });
 
-// Get all CRM messages
 router.get('/admin/messages', async (req, res) => {
   try {
     const messages = await CRMMessage.findAll({
@@ -99,28 +92,35 @@ router.get('/admin/messages', async (req, res) => {
   }
 });
 
-// Get a specific message
 router.get('/admin/messages/:id', async (req, res) => {
   try {
-    const message = await CRMMessage.findByPk(req.params.id, {
-      include: [
-        { model: CRMCharacter, as: 'character' },
-        { model: DailyTask }
-      ]
-    });
-
+    const message = await CRMMessage.findByPk(req.params.id);
+    
     if (!message) {
       return res.status(404).json({ success: false, error: 'Message not found' });
     }
 
-    res.json({ success: true, message });
+    let character = null;
+    if (message.character_id) {
+      try {
+        character = await CRMCharacter.findByPk(message.character_id);
+      } catch (charError) {
+        console.error('Error fetching character:', charError.message);
+      }
+    }
+
+    const responseMessage = message.toJSON();
+    if (character) {
+      responseMessage.character = character.toJSON();
+    }
+
+    res.json({ success: true, message: responseMessage });
   } catch (error) {
     console.error('Error fetching message:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch message' });
   }
 });
 
-// Create a new message
 router.post('/admin/messages', async (req, res) => {
   try {
     const message = await CRMMessage.create(req.body);
@@ -131,7 +131,6 @@ router.post('/admin/messages', async (req, res) => {
   }
 });
 
-// Update a message
 router.put('/admin/messages/:id', async (req, res) => {
   try {
     const message = await CRMMessage.findByPk(req.params.id);
@@ -148,7 +147,6 @@ router.put('/admin/messages/:id', async (req, res) => {
   }
 });
 
-// Delete a message
 router.delete('/admin/messages/:id', async (req, res) => {
   try {
     const message = await CRMMessage.findByPk(req.params.id);
@@ -165,12 +163,10 @@ router.delete('/admin/messages/:id', async (req, res) => {
   }
 });
 
-// Send a message to users
 router.post('/admin/send-message', async (req, res) => {
   try {
     const { message_id, user_ids, segment } = req.body;
     
-    // Find the message
     const message = await CRMMessage.findByPk(message_id);
     
     if (!message) {
@@ -179,17 +175,14 @@ router.post('/admin/send-message', async (req, res) => {
     
     let targetUsers = [];
     
-    // If user_ids provided, use those
     if (user_ids && Array.isArray(user_ids) && user_ids.length > 0) {
       targetUsers = await User.findAll({
         where: { id: { [Op.in]: user_ids } }
       });
     }
-    // Otherwise use segmentation
     else if (segment && typeof segment === 'object') {
       const whereClause = {};
       
-      // Add segment criteria to where clause
       if (segment.min_balance) {
         whereClause.balance = { ...whereClause.balance, [Op.gte]: segment.min_balance };
       }
@@ -232,10 +225,8 @@ router.post('/admin/send-message', async (req, res) => {
       return res.status(400).json({ error: 'Either user_ids or segment criteria are required' });
     }
     
-    // Create user messages for each target user
     const createdMessages = [];
     for (const user of targetUsers) {
-      // Check if user already has this message
       const existingMessage = await UserCRMMessage.findOne({
         where: {
           user_id: user.id,
@@ -268,10 +259,8 @@ router.post('/admin/send-message', async (req, res) => {
   }
 });
 
-// Get message analytics
 router.get('/admin/analytics', async (req, res) => {
   try {
-    // Get message statistics using raw SQL for more complex aggregations
     const stats = await sequelize.query(`
       SELECT
         m.id, m.title, m.message_type,

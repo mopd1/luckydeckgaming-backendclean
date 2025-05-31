@@ -70,6 +70,10 @@ module.exports = (sequelize, DataTypes) => {
       otherKey: 'set_id',
       as: 'taskSet'
     });
+    DailyTask.hasMany(models.CRMMessage, {
+      foreignKey: 'task_id',
+      sourceKey: 'task_id'
+    });
   };
 
   return DailyTask;
