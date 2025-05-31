@@ -2,25 +2,96 @@
   <div>
     <v-card>
       <v-card-title class="d-flex justify-space-between">
-        <span>Task Sets</span>
+        <span>Task Sets ({{ taskSets.length }} sets loaded)</span>
         <v-btn color="primary" @click="showSetDialog = true">Add New Set</v-btn>
       </v-card-title>
       
-      <v-data-table
-        :headers="headers"
-        :items="taskSets"
-        :loading="loading"
-        class="elevation-1"
-      >
-        <template v-slot:item.actions="{ item }">
-          <v-btn icon size="small" @click="editSet(item)">
-            <v-icon>mdi-pencil</v-icon>
-          </v-btn>
-          <v-btn icon size="small" @click="manageTasks(item)" class="ml-2">
-            <v-icon>mdi-format-list-checks</v-icon>
-          </v-btn>
-        </template>
-      </v-data-table>
+      <!-- Custom Vuetify-styled table -->
+      <div class="pa-4">
+        <div class="v-table v-table--density-default v-theme--dark" style="background: var(--v-theme-surface); border-radius: 4px; overflow: hidden;">
+          <div class="v-table__wrapper">
+            <table style="width: 100%;">
+              <thead>
+                <tr style="background: rgba(255,255,255,0.05); height: 52px;">
+                  <th style="padding: 0 16px; text-align: left; font-weight: 500; color: rgba(255,255,255,0.87);">
+                    Set ID
+                  </th>
+                  <th style="padding: 0 16px; text-align: left; font-weight: 500; color: rgba(255,255,255,0.87);">
+                    Name
+                  </th>
+                  <th style="padding: 0 16px; text-align: left; font-weight: 500; color: rgba(255,255,255,0.87);">
+                    Description
+                  </th>
+                  <th style="padding: 0 16px; text-align: left; font-weight: 500; color: rgba(255,255,255,0.87);">
+                    Tasks
+                  </th>
+                  <th style="padding: 0 16px; text-align: left; font-weight: 500; color: rgba(255,255,255,0.87);">
+                    Status
+                  </th>
+                  <th style="padding: 0 16px; text-align: left; font-weight: 500; color: rgba(255,255,255,0.87); width: 120px;">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="taskSet in taskSets" :key="taskSet.set_id" 
+                    style="height: 52px; border-bottom: 1px solid rgba(255,255,255,0.12);"
+                    class="custom-row">
+                  <td style="padding: 0 16px; color: rgba(255,255,255,0.87); font-family: monospace;">
+                    {{ taskSet.set_id }}
+                  </td>
+                  <td style="padding: 0 16px; color: rgba(255,255,255,0.87);">
+                    {{ taskSet.name }}
+                  </td>
+                  <td style="padding: 0 16px; color: rgba(255,255,255,0.60); max-width: 300px; overflow: hidden; text-overflow: ellipsis;">
+                    {{ taskSet.description || 'No description' }}
+                  </td>
+                  <td style="padding: 0 16px; color: rgba(255,255,255,0.87); text-align: center;">
+                    {{ taskSet.taskCount || taskSet.dailyTasks?.length || 0 }}
+                  </td>
+                  <td style="padding: 0 16px;">
+                    <v-chip
+                      :color="taskSet.is_active ? 'success' : 'error'"
+                      size="small"
+                      variant="flat"
+                    >
+                      {{ taskSet.is_active ? 'Active' : 'Inactive' }}
+                    </v-chip>
+                  </td>
+                  <td style="padding: 0 16px;">
+                    <v-btn 
+                      icon="mdi-pencil" 
+                      size="small" 
+                      variant="text" 
+                      @click="editSet(taskSet)"
+                      class="mr-1"
+                    ></v-btn>
+                    <v-btn 
+                      icon="mdi-format-list-checks" 
+                      size="small" 
+                      variant="text" 
+                      @click="manageTasks(taskSet)"
+                    ></v-btn>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          
+          <!-- No data state -->
+          <div v-if="taskSets.length === 0 && !loading" style="padding: 48px; text-align: center; color: rgba(255,255,255,0.60);">
+            <div style="font-size: 18px; margin-bottom: 8px;">No Task Sets Available</div>
+            <div>There are currently no task sets configured.</div>
+          </div>
+          
+          <!-- Loading state -->
+          <div v-if="loading" style="padding: 48px; text-align: center;">
+            <v-progress-circular indeterminate color="primary" class="mb-4"></v-progress-circular>
+            <div style="color: rgba(255,255,255,0.60);">Loading task sets, please wait...</div>
+          </div>
+        </div>
+      </div>
+      
     </v-card>
     
     <!-- Set Dialog -->
@@ -183,9 +254,9 @@ async function loadTaskSets() {
   try {
     loading.value = true
     const response = await api.get('/daily-tasks/sets')
-    taskSets.value = response.data.sets.map(set => ({
+    taskSets.value = response.data.taskSets.map(set => ({
       ...set,
-      taskCount: set.DailyTasks?.length || 0
+      taskCount: set.dailyTasks?.length || 0
     }))
   } catch (error) {
     console.error('Error loading task sets:', error)
@@ -212,12 +283,19 @@ function editSet(item) {
 async function saveSet() {
   try {
     if (isEditing.value) {
-      await api.put(`/daily-tasks/sets/${setForm.value.set_id}`, setForm.value)
+      await api.put(`/daily-tasks/sets/${setForm.value.id}`, setForm.value)
     } else {
       await api.post('/daily-tasks/sets', setForm.value)
     }
     
     showSetDialog.value = false
+    isEditing.value = false
+    setForm.value = {
+      set_id: '',
+      name: '',
+      description: '',
+      is_active: true
+    }
     await loadTaskSets()
   } catch (error) {
     console.error('Error saving task set:', error)
@@ -229,11 +307,14 @@ async function manageTasks(set) {
   currentSet.value = set
   
   try {
-    const response = await api.get(`/daily-tasks/sets/${set.set_id}/tasks`)
-    currentSetTasks.value = response.data.tasks
+    const response = await api.get(`/daily-tasks/sets/${set.id}/tasks`)
+    currentSetTasks.value = response.data.tasks || []
     showAssignDialog.value = true
   } catch (error) {
     console.error('Error loading set tasks:', error)
+    // If the endpoint doesn't exist yet, initialize with empty array
+    currentSetTasks.value = []
+    showAssignDialog.value = true
   }
 }
 
@@ -250,7 +331,7 @@ async function addTaskToSet() {
       ? Math.max(...currentSetTasks.value.map(t => parseInt(t.display_order))) + 1
       : 0
       
-    const response = await api.post(`/daily-tasks/sets/${currentSet.value.set_id}/tasks`, {
+    const response = await api.post(`/daily-tasks/sets/${currentSet.value.id}/tasks`, {
       task_id: selectedTaskId.value,
       display_order: nextOrder
     })
@@ -270,7 +351,7 @@ async function addTaskToSet() {
 
 async function updateTaskOrder(task) {
   try {
-    await api.put(`/daily-tasks/sets/${currentSet.value.set_id}/tasks/${task.task_id}`, {
+    await api.put(`/daily-tasks/sets/${currentSet.value.id}/tasks/${task.task_id}`, {
       display_order: parseInt(task.display_order)
     })
   } catch (error) {
@@ -281,7 +362,7 @@ async function updateTaskOrder(task) {
 
 async function removeTaskFromSet(task) {
   try {
-    await api.delete(`/daily-tasks/sets/${currentSet.value.set_id}/tasks/${task.task_id}`)
+    await api.delete(`/daily-tasks/sets/${currentSet.value.id}/tasks/${task.task_id}`)
     currentSetTasks.value = currentSetTasks.value.filter(t => t.task_id !== task.task_id)
   } catch (error) {
     console.error('Error removing task from set:', error)
@@ -289,3 +370,19 @@ async function removeTaskFromSet(task) {
   }
 }
 </script>
+
+<style scoped>
+.custom-row {
+  transition: background-color 0.2s;
+  cursor: default;
+}
+
+.custom-row:hover {
+  background-color: rgba(255,255,255,0.08) !important;
+}
+
+.v-table {
+  border-radius: 4px;
+  box-shadow: 0px 2px 1px -1px var(--v-shadow-key-umbra-opacity, rgba(0, 0, 0, 0.2)), 0px 1px 1px 0px var(--v-shadow-key-penumbra-opacity, rgba(0, 0, 0, 0.14)), 0px 1px 3px 0px var(--v-shadow-key-ambient-opacity, rgba(0, 0, 0, 0.12));
+}
+</style>
