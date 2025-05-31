@@ -452,4 +452,142 @@ router.get('/sets/:id/tasks', authenticateToken, async (req, res) => {
   }
 });
 
+// POST /api/daily-tasks/sets/:id/tasks - Add a task to a task set
+router.post('/sets/:id/tasks', authenticateToken, async (req, res) => {
+  try {
+    const adminUser = req.user;
+    if (!adminUser || (adminUser.role !== 'admin' && adminUser.role !== 'superadmin')) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const taskSetId = req.params.id;
+    const { task_id, display_order = 0 } = req.body;
+
+    console.log(`[DailyTasksRoutes /sets/:id/tasks POST] Adding task ${task_id} to set ID: ${taskSetId}`);
+
+    // Find the task set
+    const taskSet = await TaskSet.findByPk(taskSetId);
+    if (!taskSet) {
+      return res.status(404).json({ error: 'Task set not found' });
+    }
+
+    // Verify the task exists
+    const task = await DailyTask.findOne({ where: { task_id } });
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    // Check if task is already in the set
+    const existingAssociation = await TaskSetTasks.findOne({
+      where: { set_id: taskSet.set_id, task_id }
+    });
+
+    if (existingAssociation) {
+      return res.status(400).json({ error: 'Task is already in this set' });
+    }
+
+    // Add the task to the set
+    const taskSetTask = await TaskSetTasks.create({
+      set_id: taskSet.set_id,
+      task_id,
+      display_order: parseInt(display_order) || 0
+    });
+
+    console.log(`[DailyTasksRoutes /sets/:id/tasks POST] Task added successfully`);
+    res.status(201).json({ 
+      message: 'Task added to set successfully',
+      taskSetTask 
+    });
+
+  } catch (error) {
+    console.error(`[DailyTasksRoutes /sets/:id/tasks POST] Error adding task to set:`, error);
+    res.status(500).json({ error: 'Failed to add task to set', details: error.message });
+  }
+});
+
+// PUT /api/daily-tasks/sets/:id/tasks/:task_id - Update task order in a set
+router.put('/sets/:id/tasks/:task_id', authenticateToken, async (req, res) => {
+  try {
+    const adminUser = req.user;
+    if (!adminUser || (adminUser.role !== 'admin' && adminUser.role !== 'superadmin')) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const taskSetId = req.params.id;
+    const taskId = req.params.task_id;
+    const { display_order } = req.body;
+
+    console.log(`[DailyTasksRoutes /sets/:id/tasks/:task_id PUT] Updating task ${taskId} order in set ID: ${taskSetId}`);
+
+    // Find the task set
+    const taskSet = await TaskSet.findByPk(taskSetId);
+    if (!taskSet) {
+      return res.status(404).json({ error: 'Task set not found' });
+    }
+
+    // Find the task association
+    const taskSetTask = await TaskSetTasks.findOne({
+      where: { set_id: taskSet.set_id, task_id: taskId }
+    });
+
+    if (!taskSetTask) {
+      return res.status(404).json({ error: 'Task not found in this set' });
+    }
+
+    // Update the display order
+    if (display_order !== undefined) {
+      await taskSetTask.update({ display_order: parseInt(display_order) || 0 });
+    }
+
+    console.log(`[DailyTasksRoutes /sets/:id/tasks/:task_id PUT] Task order updated successfully`);
+    res.status(200).json({ 
+      message: 'Task order updated successfully',
+      taskSetTask 
+    });
+
+  } catch (error) {
+    console.error(`[DailyTasksRoutes /sets/:id/tasks/:task_id PUT] Error updating task order:`, error);
+    res.status(500).json({ error: 'Failed to update task order', details: error.message });
+  }
+});
+
+// DELETE /api/daily-tasks/sets/:id/tasks/:task_id - Remove task from a set
+router.delete('/sets/:id/tasks/:task_id', authenticateToken, async (req, res) => {
+  try {
+    const adminUser = req.user;
+    if (!adminUser || (adminUser.role !== 'admin' && adminUser.role !== 'superadmin')) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const taskSetId = req.params.id;
+    const taskId = req.params.task_id;
+
+    console.log(`[DailyTasksRoutes /sets/:id/tasks/:task_id DELETE] Removing task ${taskId} from set ID: ${taskSetId}`);
+
+    // Find the task set
+    const taskSet = await TaskSet.findByPk(taskSetId);
+    if (!taskSet) {
+      return res.status(404).json({ error: 'Task set not found' });
+    }
+
+    // Find and delete the task association
+    const taskSetTask = await TaskSetTasks.findOne({
+      where: { set_id: taskSet.set_id, task_id: taskId }
+    });
+
+    if (!taskSetTask) {
+      return res.status(404).json({ error: 'Task not found in this set' });
+    }
+
+    await taskSetTask.destroy();
+
+    console.log(`[DailyTasksRoutes /sets/:id/tasks/:task_id DELETE] Task removed successfully`);
+    res.status(204).send();
+
+  } catch (error) {
+    console.error(`[DailyTasksRoutes /sets/:id/tasks/:task_id DELETE] Error removing task from set:`, error);
+    res.status(500).json({ error: 'Failed to remove task from set', details: error.message });
+  }
+});
+
 module.exports = router;
