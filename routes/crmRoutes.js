@@ -24,7 +24,8 @@ router.get('/messages', authenticateToken, cacheMiddleware(120), async (req, res
             {
               model: db.CRMCharacter,
               as: 'character',
-              attributes: ['name', 'title', 'avatar_data']
+              attributes: ['name', 'title', 'avatar_data'],
+              required: false
             }
           ]
         }
@@ -85,7 +86,8 @@ router.get('/messages/:id', authenticateToken, cacheMiddleware(300), async (req,
             {
               model: db.CRMCharacter,
               as: 'character',
-              attributes: ['name', 'title', 'avatar_data']
+              attributes: ['name', 'title', 'avatar_data'],
+              required: false
             },
             {
               model: db.DailyTask,
