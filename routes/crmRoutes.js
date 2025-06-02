@@ -23,7 +23,7 @@ router.get('/messages', authenticateToken, cacheMiddleware(120), async (req, res
           include: [
             {
               model: db.CRMCharacter,
-              as :'character',
+              as: 'character',
               attributes: ['name', 'title', 'avatar_data']
             }
           ]
@@ -60,9 +60,10 @@ router.get('/messages', authenticateToken, cacheMiddleware(120), async (req, res
     
     res.status(200).json(messages);
   } catch (error) {
-    console.error('Error fetching CRM messages:', error);
-    res.status(500).json({ error: 'Failed to fetch messages' });
+  console.error('Error fetching CRM messages:', error);
+  res.status(500).json({ error: 'Failed to fetch messages' });
   }
+
 });
 
 // Get a specific message by ID
@@ -504,8 +505,12 @@ router.post('/trigger', authenticateToken, async (req, res) => {
       count: createdMessages.length
     });
   } catch (error) {
-    console.error('Error processing trigger event:', error);
-    res.status(500).json({ error: 'Failed to process trigger event' });
+  console.error('Error processing trigger event:', error);
+  console.error('Error stack:', error.stack);
+  console.error('Error message:', error.message);
+  console.error('Event type:', req.body.event_type);
+  console.error('User ID:', req.user?.id);
+  res.status(500).json({ error: 'Failed to process trigger event', details: error.message });
   }
 });
 
