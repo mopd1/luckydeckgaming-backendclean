@@ -69,20 +69,27 @@ router.get('/current', authenticateToken, cacheMiddleware(300), async (req, res)
     // This is unlikely but could happen in extreme race conditions. Respond with defaults.
     if (!userProgressRaw) {
         console.warn(`GET /current: UserSeasonProgress for user ${userId}, season ${activeSeason.season_id} not found immediately after potential creation. Returning defaults.`);
-         // You could try findOrCreate here again as a fallback if needed, but let's see if direct findOne works first
-         // const [userProgress, created] = await UserSeasonProgress.findOrCreate({ ... });
-         // ... then parse userProgress.claimed_milestones ...
-         // For now, return defaults:
-          const user = await User.findByPk(userId, { attributes: ['action_points'], raw: true });
-          res.json({
-              season: { /* ... season data ... */ },
-              user_progress: {
-                  action_points: user?.action_points || 0,
-                  has_inside_track: false,
-                  claimed_milestones: []
-              }
-          });
-         return;
+        const user = await User.findByPk(userId, { attributes: ['action_points'], raw: true });
+        
+        const endDate = new Date(activeSeason.end_date);
+        const daysRemaining = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
+        
+        return res.json({
+            season: {
+                season_id: activeSeason.season_id,
+                name: activeSeason.name,
+                description: activeSeason.description,
+                start_date: activeSeason.start_date,
+                end_date: activeSeason.end_date,
+                is_active: activeSeason.is_active,
+                days_remaining: daysRemaining
+            },
+            user_progress: {
+                action_points: user?.action_points || 0,
+                has_inside_track: false,
+                claimed_milestones: []
+            }
+        });
     }
 
     // Fetch User separately
@@ -95,10 +102,37 @@ router.get('/current', authenticateToken, cacheMiddleware(300), async (req, res)
     let finalClaimedMilestones = [];
     let rawClaimed = userProgressRaw.claimed_milestones; // Access directly
 
-    if (rawClaimed) { /* ... (same parsing logic as before) ... */ }
+    if (rawClaimed) {
+        if (typeof rawClaimed === 'string') {
+            try {
+                const parsed = JSON.parse(rawClaimed);
+                if (Array.isArray(parsed)) {
+                    finalClaimedMilestones = parsed;
+                    console.log(`Successfully parsed claimed_milestones string: ${rawClaimed} into array: ${JSON.stringify(finalClaimedMilestones)}`);
+                } else {
+                    console.warn(`Parsed claimed_milestones not an array: ${JSON.stringify(parsed)}`);
+                }
+            } catch (e) {
+                console.error(`Error parsing claimed_milestones: ${rawClaimed}`, e);
+            }
+        } else if (Array.isArray(rawClaimed)) {
+            finalClaimedMilestones = [...rawClaimed]; // Create a copy
+            console.log(`claimed_milestones already an array: ${JSON.stringify(finalClaimedMilestones)}`);
+        } else {
+            console.warn(`claimed_milestones has unexpected type: ${typeof rawClaimed}`);
+        }
+    }
 
     res.json({
-      season: { /* ... */ },
+      season: {
+        season_id: activeSeason.season_id,
+        name: activeSeason.name,
+        description: activeSeason.description,
+        start_date: activeSeason.start_date,
+        end_date: activeSeason.end_date,
+        is_active: activeSeason.is_active,
+        days_remaining: daysRemaining
+      },
       user_progress: {
         action_points: user?.action_points || 0,
         has_inside_track: userProgressRaw.has_inside_track ?? false,
