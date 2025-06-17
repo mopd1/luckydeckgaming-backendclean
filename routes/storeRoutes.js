@@ -204,4 +204,181 @@ router.post('/purchase-package/:id', authenticateToken, async (req, res) => {
     }
 });
 
+const https = require('https');
+
+// Apple receipt validation endpoint
+router.post('/validate-apple-receipt', authenticateToken, async (req, res) => {
+    let transaction;
+    
+    try {
+        transaction = await sequelize.transaction();
+        
+        const { receipt, product_id } = req.body;
+        const userId = req.user.id;
+        
+        console.log('Validating Apple receipt for user:', userId, 'product:', product_id);
+        
+        // Validate receipt with Apple
+        const appleValidation = await validateAppleReceipt(receipt);
+        
+        if (!appleValidation.valid) {
+            throw new Error('Invalid Apple receipt: ' + appleValidation.error);
+        }
+        
+        // Check if this transaction was already processed
+        const existingTransaction = await StoreTransaction.findOne({
+            where: { apple_transaction_id: appleValidation.transaction_id },
+            transaction
+        });
+        
+        if (existingTransaction) {
+            throw new Error('Transaction already processed');
+        }
+        
+        // Map Apple product ID to your package
+        const packageInfo = getPackageFromAppleProductId(product_id);
+        if (!packageInfo) {
+            throw new Error('Invalid product ID: ' + product_id);
+        }
+        
+        // Find and update user balance
+        const user = await User.findByPk(userId, { transaction });
+        if (!user) {
+            throw new Error('User not found');
+        }
+        
+        const newChipBalance = user.balance + packageInfo.chips;
+        const newGemBalance = user.gems + packageInfo.gems;
+        
+        await user.update({
+            balance: newChipBalance,
+            gems: newGemBalance
+        }, { transaction });
+        
+        // Create store transaction record
+        const storeTransaction = await StoreTransaction.create({
+            user_id: userId,
+            chips_added: packageInfo.chips,
+            gems_added: packageInfo.gems,
+            type: 'apple_iap',
+            price: packageInfo.price,
+            apple_product_id: product_id,
+            apple_transaction_id: appleValidation.transaction_id,
+            timestamp: new Date()
+        }, { transaction });
+        
+        // Create revenue transaction record
+        const revenueTransaction = await RevenueTransaction.create({
+            user_id: userId,
+            amount: packageInfo.price,
+            type: 'apple_iap',
+            timestamp: new Date()
+        }, { transaction });
+        
+        await transaction.commit();
+        
+        // Clear cache
+        await clearCache('/balance');
+        
+        console.log('Apple purchase validated successfully for user:', userId);
+        
+        res.json({
+            success: true,
+            new_balance: newChipBalance,
+            new_gems: newGemBalance,
+            message: 'Purchase validated and processed successfully'
+        });
+        
+    } catch (error) {
+        if (transaction) await transaction.rollback();
+        console.error('Apple receipt validation error:', error.message);
+        res.status(400).json({
+            success: false,
+            message: error.message || 'Failed to validate Apple receipt'
+        });
+    }
+});
+
+function validateAppleReceipt(receiptData) {
+    return new Promise((resolve, reject) => {
+        // Use sandbox URL for testing, production URL for live app
+        const isProduction = process.env.NODE_ENV === 'production';
+        const hostname = isProduction ? 'buy.itunes.apple.com' : 'sandbox.itunes.apple.com';
+        
+        const postData = JSON.stringify({
+            'receipt-data': receiptData,
+            'password': process.env.APPLE_SHARED_SECRET
+        });
+        
+        const options = {
+            hostname: hostname,
+            port: 443,
+            path: '/verifyReceipt',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(postData)
+            }
+        };
+        
+        console.log('Validating receipt with Apple:', hostname);
+        
+        const req = https.request(options, (res) => {
+            let data = '';
+            
+            res.on('data', (chunk) => {
+                data += chunk;
+            });
+            
+            res.on('end', () => {
+                try {
+                    const response = JSON.parse(data);
+                    console.log('Apple validation response status:', response.status);
+                    
+                    if (response.status === 0) {
+                        // Extract transaction info from the receipt
+                        const receipt = response.receipt;
+                        const inApp = receipt.in_app[receipt.in_app.length - 1]; // Get latest transaction
+                        
+                        resolve({
+                            valid: true,
+                            transaction_id: inApp.transaction_id,
+                            product_id: inApp.product_id,
+                            purchase_date: inApp.purchase_date_ms
+                        });
+                    } else {
+                        resolve({ 
+                            valid: false, 
+                            error: 'Apple receipt validation failed with status: ' + response.status 
+                        });
+                    }
+                } catch (parseError) {
+                    resolve({ valid: false, error: 'Failed to parse Apple response: ' + parseError.message });
+                }
+            });
+        });
+        
+        req.on('error', (error) => {
+            console.error('Apple validation error:', error);
+            resolve({ valid: false, error: error.message });
+        });
+        
+        req.write(postData);
+        req.end();
+    });
+}
+
+function getPackageFromAppleProductId(productId) {
+    const productMap = {
+        'com.luckydeckgaming.chips_1999': { chips: 2000, gems: 0, price: 1.99 },
+        'com.luckydeckgaming.chips_4999': { chips: 7500, gems: 100, price: 4.99 },
+        'com.luckydeckgaming.chips_9999': { chips: 20000, gems: 200, price: 9.99 },
+        'com.luckydeckgaming.chips_19999': { chips: 50000, gems: 400, price: 19.99 },
+        'com.luckydeckgaming.chips_49999': { chips: 150000, gems: 1000, price: 49.99 },
+        'com.luckydeckgaming.chips_99999': { chips: 400000, gems: 2000, price: 99.99 }
+    };
+    
+    return productMap[productId] || null;
+} 
+
 module.exports = router;

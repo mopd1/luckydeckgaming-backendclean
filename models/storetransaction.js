@@ -71,8 +71,17 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: true,
         defaultValue: 0.00
+      },
+      apple_product_id: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      apple_transaction_id: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        unique: true
       }
-    },
+     },
     {
       sequelize,
       modelName: 'StoreTransaction',
