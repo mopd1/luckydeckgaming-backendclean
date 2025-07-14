@@ -42,16 +42,21 @@ class PokerWebSocketServer {
     }
 
     async setupRedisSubscriptions() {
-        // Subscribe to poker game events from other instances
-        this.subscriber = redisClient.duplicate();
-        await this.subscriber.subscribe('poker:table_events');
-        
-        this.subscriber.on('message', async (channel, message) => {
-            if (channel === 'poker:table_events') {
-                const event = JSON.parse(message);
-                await this.handleRedisEvent(event);
-            }
-        });
+        try {
+            this.subscriber = redisClient.duplicate();
+            await this.subscriber.subscribe('poker:table_events');
+            
+            this.subscriber.on('message', async (channel, message) => {
+                if (channel === 'poker:table_events') {
+                    const event = JSON.parse(message);
+                    await this.handleRedisEvent(event);
+                }
+            });
+            
+            console.log('Redis pub/sub setup complete');
+        } catch (error) {
+            console.error('Error setting up Redis subscriptions:', error);
+        }
     }
 
     async handleRedisEvent(event) {
@@ -105,6 +110,7 @@ class PokerWebSocketServer {
                 userId: userData.id,
                 username: userData.username,
                 currentTable: null,
+                seatIndex: -1,
                 connected: true,
                 connectionTime: Date.now()
             };
@@ -112,32 +118,18 @@ class PokerWebSocketServer {
             this.clients.set(ws, clientInfo);
             this.setupClientEvents(ws);
             
-            // Store client connection in Redis for cross-instance tracking
-            await this.storeClientInRedis(clientInfo);
-            
             this.sendToClient(ws, {
                 type: MessageTypes.SERVER.CONNECTION_ESTABLISHED,
                 clientId,
                 userId: userData.id
             });
 
-            logger.info(`Client connected: ${clientId}`);
+            logger.info(`Client connected: ${clientId} (${userData.username})`);
 
         } catch (error) {
             logger.error('Connection error:', error);
             ws.close(4001, error.message);
         }
-    }
-
-    async storeClientInRedis(clientInfo) {
-        const key = `client:${clientInfo.userId}`;
-        const data = {
-            ...clientInfo,
-            instanceId: process.env.INSTANCE_ID || 'default',
-            lastSeen: Date.now()
-        };
-        
-        await redisClient.setex(key, 3600, JSON.stringify(data)); // 1 hour TTL
     }
 
     setupClientEvents(ws) {
@@ -162,6 +154,15 @@ class PokerWebSocketServer {
         ws.on('error', (error) => {
             logger.error('WebSocket error:', error);
         });
+
+        ws.on('ping', () => {
+            ws.lastActivity = Date.now();
+        });
+
+        ws.on('pong', () => {
+            ws.lastActivity = Date.now();
+            ws.isAlive = true;
+        });
     }
 
     async handleMessage(ws, message) {
@@ -181,6 +182,10 @@ class PokerWebSocketServer {
 
             case MessageTypes.CLIENT.POKER_ACTION:
                 await this.handlePokerAction(ws, message);
+                break;
+
+            case MessageTypes.CLIENT.REQUEST_TABLE_LIST:
+                await this.handleTableListRequest(ws, message.stakeLevel);
                 break;
 
             case MessageTypes.CLIENT.PING:
@@ -228,8 +233,13 @@ class PokerWebSocketServer {
             client.currentTable = tableId;
             client.seatIndex = seatIndex;
 
-            // Update Redis with table state
-            await gameEngine.saveToRedis();
+            // Send confirmation to joining client
+            this.sendToClient(ws, {
+                type: MessageTypes.SERVER.TABLE_JOINED,
+                tableId: tableId,
+                seatIndex: seatIndex,
+                gameState: await gameEngine.getGameState()
+            });
 
             // Notify all players in the table
             await this.broadcastToTable(tableId, {
@@ -240,7 +250,6 @@ class PokerWebSocketServer {
                     playerId: client.userId,
                     username: client.username,
                     seatIndex: seatIndex,
-                    chips: buyinAmount,
                     gameState: await gameEngine.getGameState()
                 }
             });
@@ -286,14 +295,10 @@ class PokerWebSocketServer {
                 return;
             }
 
-            // Save updated game state to Redis
-            await gameEngine.saveToRedis();
-
             // Broadcast the action result to all players at the table
             await this.broadcastToTable(client.currentTable, {
-                type: MessageTypes.SERVER.GAME_STATE,
+                type: MessageTypes.SERVER.PLAYER_ACTION,
                 data: {
-                    event: 'action_processed',
                     action: actionResult.action,
                     gameState: await gameEngine.getGameState()
                 }
@@ -308,17 +313,50 @@ class PokerWebSocketServer {
         }
     }
 
+    async handleLeaveTable(ws) {
+        const client = this.clients.get(ws);
+        if (!client || !client.currentTable) return;
+
+        const gameEngine = this.gameEngines.get(client.currentTable);
+        if (gameEngine) {
+            await gameEngine.removePlayer(client.userId);
+        }
+
+        const tableId = client.currentTable;
+        client.currentTable = null;
+        client.seatIndex = -1;
+
+        this.sendToClient(ws, {
+            type: MessageTypes.SERVER.TABLE_LEFT,
+            tableId: tableId
+        });
+
+        // Notify other players
+        await this.broadcastToTable(tableId, {
+            type: MessageTypes.SERVER.GAME_STATE,
+            data: {
+                event: 'player_left',
+                playerId: client.userId,
+                gameState: gameEngine ? await gameEngine.getGameState() : null
+            }
+        });
+    }
+
     async broadcastToTable(tableId, data) {
         // Broadcast to local clients
         await this.broadcastToLocalTable(tableId, data);
         
         // Publish to Redis for other instances
-        await redisClient.publish('poker:table_events', JSON.stringify({
-            tableId,
-            type: data.data.event,
-            data: data.data,
-            excludeInstanceId: process.env.INSTANCE_ID || 'default'
-        }));
+        try {
+            await redisClient.publish('poker:table_events', JSON.stringify({
+                tableId,
+                type: data.type,
+                data: data.data,
+                excludeInstanceId: process.env.INSTANCE_ID || 'default'
+            }));
+        } catch (error) {
+            console.error('Error publishing to Redis:', error);
+        }
     }
 
     async broadcastToLocalTable(tableId, data) {
@@ -346,7 +384,7 @@ class PokerWebSocketServer {
 
     extractToken(request) {
         const url = new URL(request.url, `http://${request.headers.host}`);
-        return url.searchParams.get('token') || request.headers['authorization'];
+        return url.searchParams.get('token') || request.headers['authorization']?.replace('Bearer ', '');
     }
 
     async authenticateUser(token) {
@@ -366,16 +404,26 @@ class PokerWebSocketServer {
                 const gameEngine = this.gameEngines.get(client.currentTable);
                 if (gameEngine) {
                     await gameEngine.handlePlayerDisconnect(client.userId);
-                    await gameEngine.saveToRedis();
                 }
             }
-            
-            // Remove from Redis
-            await redisClient.del(`client:${client.userId}`);
             
             this.clients.delete(ws);
             logger.info(`Client disconnected: ${client.id}`);
         }
+    }
+
+    close(callback) {
+        // Close all game engines
+        for (const gameEngine of this.gameEngines.values()) {
+            // Add cleanup logic if needed
+        }
+        this.gameEngines.clear();
+
+        // Close WebSocket server
+        this.wss.close(() => {
+            logger.info('Poker WebSocket server closed');
+            if (callback) callback();
+        });
     }
 }
 

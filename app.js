@@ -13,7 +13,7 @@ const { corsOptions } = require('./config/cors');
 const app = express();
 const http = require('http');
 const server = http.createServer(app);
-const WebSocketServer = require('./src/websocket/WebSocketServer');
+const PokerWebSocketServer = require('./src/websocket/PokerWebSocketServer');
 const helmet = require('helmet');
 const port = process.env.PORT || 8081;
 const passport = require('passport');
@@ -62,7 +62,7 @@ app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
 // Initialize WebSocket after middleware
-const wss = new WebSocketServer(server);
+const wss = new PokerWebSocketServer(server);
 
 // Import models and initialize passport
 const { User } = require('./models');

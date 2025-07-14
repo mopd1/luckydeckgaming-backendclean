@@ -1,336 +1,527 @@
 // src/poker/PokerGameEngine.js
 const { redisClient } = require('../../services/redisClient');
 const PokerDeck = require('./PokerDeck');
-const PokerHand = require('./PokerHand');
+const { HandEvaluator, HandRank } = require('./HandEvaluator');
+const { BotPlayer } = require('./BotPlayer');
 
 class PokerGameEngine {
     constructor(tableId, websocketServer) {
         this.tableId = tableId;
         this.websocketServer = websocketServer;
-        this.players = new Map(); // seatIndex -> player data
-        this.communityCards = [];
-        this.pot = 0;
-        this.currentBet = 0;
-        this.gamePhase = 'waiting'; // waiting, preflop, flop, turn, river, showdown
-        this.currentPlayerIndex = -1;
-        this.dealerIndex = 0;
-        this.smallBlindIndex = -1;
-        this.bigBlindIndex = -1;
-        this.handNumber = 0;
-        this.deck = null;
-        this.lastAction = null;
-        this.actionTimeout = null;
         
-        // Game configuration
-        this.maxPlayers = 5;
-        this.smallBlind = 50; // Will be set based on stake level
-        this.bigBlind = 100;
-        this.actionTimeLimit = 30000; // 30 seconds
+        // Game state (matching TableManager.gd structure)
+        this.players = new Array(5).fill(null); // MAX_PLAYERS = 5
+        this.activeHand = false;
+        this.dealerPosition = 0;
+        this.currentPot = 0;
+        this.currentBet = 0.0;
+        this.communityCards = [];
+        this.currentRound = 'preflop';
+        this.actionOn = -1;
+        this.sidePots = [];
+        this.handNumber = 0;
+        this.waitingPlayers = [];
+        this.rakeEligible = false;
+        this.totalRake = 0;
+        this.handRake = 0;
+        this.mainPotBeforeRake = 0;
+        this.sidePots = [];
+        this.lastAggressiveActor = -1;
+        this.playersShowingCards = [];
+        this.lastRaiseAmountThisRound = 0.0;
+        
+        // Table configuration
+        this.stakeLevel = 0;
+        this.smallBlind = 0;
+        this.bigBlind = 0;
+        this.minBuyin = 0;
+        this.maxBuyin = 0;
+        
+        // Game timing
+        this.actionTimeout = null;
+        this.actionTimeLimit = 20000; // 20 seconds (matching frontend)
+        
+        // Deck
+        this.deck = null;
+        
+        console.log(`PokerGameEngine created for table ${tableId}`);
     }
 
     async loadFromRedis() {
         try {
-            const gameStateKey = `poker:table:${this.tableId}`;
-            const gameStateData = await redisClient.get(gameStateKey);
+            const tablePattern = `poker:table:*:${this.tableId}`;
+            const tableKeys = await redisClient.keys(tablePattern);
             
-            if (gameStateData) {
-                const gameState = JSON.parse(gameStateData);
-                this.deserializeGameState(gameState);
-                console.log(`Loaded game state for table ${this.tableId}`);
-            } else {
-                // Initialize new table
-                await this.initializeNewTable();
-                console.log(`Initialized new table ${this.tableId}`);
+            if (tableKeys.length > 0) {
+                const tableData = await redisClient.get(tableKeys[0]);
+                if (tableData) {
+                    const gameState = JSON.parse(tableData);
+                    this.deserializeGameState(gameState);
+                    console.log(`Loaded game state for table ${this.tableId}`);
+                    return;
+                }
             }
+            
+            // If no existing state, initialize as waiting table
+            console.log(`No existing state found for table ${this.tableId}`);
+            
         } catch (error) {
             console.error(`Error loading table ${this.tableId} from Redis:`, error);
-            await this.initializeNewTable();
         }
     }
 
     async saveToRedis() {
         try {
-            const gameStateKey = `poker:table:${this.tableId}`;
-            const gameState = this.serializeGameState();
-            await redisClient.setex(gameStateKey, 3600, JSON.stringify(gameState)); // 1 hour TTL
+            // Find the correct Redis key for this table
+            const tablePattern = `poker:table:*:${this.tableId}`;
+            const tableKeys = await redisClient.keys(tablePattern);
+            
+            if (tableKeys.length > 0) {
+                const gameState = this.serializeGameState();
+                await redisClient.setex(tableKeys[0], 7200, JSON.stringify(gameState)); // 2 hour TTL
+                console.log(`Saved game state for table ${this.tableId}`);
+            }
         } catch (error) {
             console.error(`Error saving table ${this.tableId} to Redis:`, error);
         }
     }
 
-    async initializeNewTable() {
-        this.players.clear();
-        this.communityCards = [];
-        this.pot = 0;
-        this.currentBet = 0;
-        this.gamePhase = 'waiting';
-        this.currentPlayerIndex = -1;
-        this.dealerIndex = 0;
-        this.handNumber = 0;
-        this.deck = new PokerDeck();
+    deserializeGameState(gameState) {
+        // Load table configuration
+        this.stakeLevel = gameState.stakeLevel || 1;
+        this.smallBlind = gameState.smallBlind || 50;
+        this.bigBlind = gameState.bigBlind || 100;
+        this.minBuyin = gameState.minBuyin || 2000;
+        this.maxBuyin = gameState.maxBuyin || 10000;
         
-        await this.saveToRedis();
+        // Load players (both humans and bots)
+        this.players = new Array(5).fill(null);
+        if (gameState.players && Array.isArray(gameState.players)) {
+            for (const [seatIndex, playerData] of gameState.players) {
+                if (playerData && seatIndex >= 0 && seatIndex < 5) {
+                    this.players[seatIndex] = playerData;
+                }
+            }
+        }
+        
+        // Load bots
+        if (gameState.bots && Array.isArray(gameState.bots)) {
+            for (const [seatIndex, botData] of gameState.bots) {
+                if (botData && seatIndex >= 0 && seatIndex < 5) {
+                    this.players[seatIndex] = botData;
+                }
+            }
+        }
+        
+        // Load game state
+        this.activeHand = gameState.gamePhase !== 'waiting';
+        this.dealerPosition = gameState.dealerIndex || 0;
+        this.currentPot = gameState.pot || 0;
+        this.currentBet = gameState.currentBet || 0;
+        this.communityCards = gameState.communityCards || [];
+        this.currentRound = gameState.gamePhase || 'waiting';
+        this.actionOn = gameState.currentPlayerIndex || -1;
+        this.handNumber = gameState.handNumber || 0;
+        this.lastRaiseAmountThisRound = gameState.lastRaiseAmountThisRound || 0;
+        
+        console.log(`Deserialized game state for table ${this.tableId}, phase: ${this.currentRound}`);
+    }
+
+    serializeGameState() {
+        // Convert back to Redis format matching tableManager structure
+        const playerEntries = [];
+        const botEntries = [];
+        
+        for (let i = 0; i < this.players.length; i++) {
+            if (this.players[i]) {
+                if (this.players[i].is_bot) {
+                    botEntries.push([i, this.players[i]]);
+                } else {
+                    playerEntries.push([i, this.players[i]]);
+                }
+            }
+        }
+        
+        return {
+            tableId: this.tableId,
+            stakeLevel: this.stakeLevel,
+            smallBlind: this.smallBlind,
+            bigBlind: this.bigBlind,
+            minBuyin: this.minBuyin,
+            maxBuyin: this.maxBuyin,
+            players: playerEntries,
+            bots: botEntries,
+            gamePhase: this.activeHand ? this.currentRound : 'waiting',
+            dealerIndex: this.dealerPosition,
+            pot: this.currentPot,
+            currentBet: this.currentBet,
+            communityCards: this.communityCards,
+            currentPlayerIndex: this.actionOn,
+            handNumber: this.handNumber,
+            lastRaiseAmountThisRound: this.lastRaiseAmountThisRound,
+            createdAt: Date.now(),
+            lastActivity: Date.now()
+        };
     }
 
     async addPlayer(userId, username, seatIndex, buyinAmount) {
-        if (this.players.has(seatIndex)) {
+        // Validate seat availability
+        if (seatIndex < 0 || seatIndex >= 5) {
+            return { success: false, error: 'Invalid seat index' };
+        }
+        
+        if (this.players[seatIndex] !== null) {
             return { success: false, error: 'Seat already occupied' };
         }
-
-        if (this.players.size >= this.maxPlayers) {
-            return { success: false, error: 'Table is full' };
+        
+        // Validate buyin amount
+        if (buyinAmount < this.minBuyin || buyinAmount > this.maxBuyin) {
+            return { success: false, error: `Buyin must be between ${this.minBuyin} and ${this.maxBuyin}` };
         }
-
-        if (buyinAmount < this.bigBlind * 20) {
-            return { success: false, error: 'Minimum buyin is 20 big blinds' };
-        }
-
-        const player = {
-            userId,
-            username,
-            seatIndex,
+        
+        // Create player data (matching frontend structure)
+        const playerData = {
+            user_id: userId,
+            name: username,
             chips: buyinAmount,
-            cards: [],
-            currentBet: 0,
-            totalBet: 0,
+            bet: 0,
             folded: false,
-            allIn: false,
-            connected: true,
-            lastAction: null,
-            actionTime: null
+            sitting_out: false,
+            cards: [],
+            auto_post_blinds: true,
+            last_action: "",
+            last_action_amount: 0,
+            time_bank: 30.0,
+            avatar_data: {},
+            is_bot: false
         };
-
-        this.players.set(seatIndex, player);
-
-        // Start game if we have enough players and we're waiting
-        if (this.players.size >= 2 && this.gamePhase === 'waiting') {
+        
+        this.players[seatIndex] = playerData;
+        
+        // Start game if we have enough players and not currently in a hand
+        if (!this.activeHand && this.countActivePlayers() >= 2) {
+            // Wait a moment then start new hand
             setTimeout(() => {
                 this.startNewHand();
-            }, 3000); // 3 second delay before starting
+            }, 3000);
         }
-
-        return { success: true, player };
+        
+        await this.saveToRedis();
+        
+        console.log(`Player ${username} joined table ${this.tableId} at seat ${seatIndex}`);
+        return { success: true, player: playerData };
     }
 
     async removePlayer(userId) {
-        let playerToRemove = null;
-        let seatIndex = -1;
-
-        for (const [seat, player] of this.players) {
-            if (player.userId === userId) {
-                playerToRemove = player;
-                seatIndex = seat;
+        let removedSeat = -1;
+        
+        for (let i = 0; i < this.players.length; i++) {
+            if (this.players[i] && this.players[i].user_id === userId) {
+                this.players[i] = null;
+                removedSeat = i;
                 break;
             }
         }
-
-        if (!playerToRemove) {
+        
+        if (removedSeat === -1) {
             return { success: false, error: 'Player not found' };
         }
-
-        this.players.delete(seatIndex);
-
-        // Handle game state if player was in active hand
-        if (this.gamePhase !== 'waiting' && this.players.size < 2) {
-            await this.endGame();
+        
+        // Handle active hand scenarios
+        if (this.activeHand) {
+            // If it was the player's turn, advance to next player
+            if (this.actionOn === removedSeat) {
+                await this.moveToNextPlayer();
+            }
+            
+            // Check if we still have enough players to continue
+            if (this.countActivePlayers() < 2) {
+                await this.endHand();
+            }
         }
-
+        
+        await this.saveToRedis();
+        
+        console.log(`Player removed from seat ${removedSeat} in table ${this.tableId}`);
         return { success: true };
     }
 
     async processAction(userId, action, amount = 0) {
-        const currentPlayer = this.getCurrentPlayer();
+        // Find player
+        const playerSeat = this.findPlayerSeat(userId);
+        if (playerSeat === -1) {
+            return { success: false, error: 'Player not found at table' };
+        }
         
-        if (!currentPlayer || currentPlayer.userId !== userId) {
+        // Validate it's player's turn
+        if (this.actionOn !== playerSeat) {
             return { success: false, error: 'Not your turn' };
         }
-
-        if (this.gamePhase === 'waiting' || this.gamePhase === 'showdown') {
-            return { success: false, error: 'Game not in progress' };
+        
+        if (!this.activeHand) {
+            return { success: false, error: 'No active hand' };
         }
-
+        
+        const player = this.players[playerSeat];
+        if (!player || player.folded) {
+            return { success: false, error: 'Invalid player state' };
+        }
+        
         // Clear action timeout
         if (this.actionTimeout) {
             clearTimeout(this.actionTimeout);
             this.actionTimeout = null;
         }
+        
+        // Process the action
+        const actionResult = await this.executeAction(playerSeat, action, amount);
+        
+        if (actionResult.success) {
+            // Move to next player or next phase
+            await this.moveToNextPlayer();
+            await this.saveToRedis();
+        }
+        
+        return actionResult;
+    }
 
-        let actionResult = { success: true, action: { type: action, amount, player: currentPlayer.username } };
-
+    async executeAction(seatIndex, action, amount) {
+        const player = this.players[seatIndex];
+        
         switch (action) {
             case 'fold':
-                currentPlayer.folded = true;
-                currentPlayer.lastAction = 'fold';
-                break;
-
+                player.folded = true;
+                player.last_action = 'fold';
+                console.log(`Player ${player.name} folds`);
+                return { success: true, action: { type: 'fold', player: player.name, seatIndex } };
+                
             case 'check':
-                if (this.currentBet > currentPlayer.currentBet) {
+                if (this.currentBet > player.bet) {
                     return { success: false, error: 'Cannot check, must call or fold' };
                 }
-                currentPlayer.lastAction = 'check';
-                break;
-
-            case 'call':
-                const callAmount = this.currentBet - currentPlayer.currentBet;
-                if (callAmount > currentPlayer.chips) {
-                    // All-in
-                    this.pot += currentPlayer.chips;
-                    currentPlayer.currentBet += currentPlayer.chips;
-                    currentPlayer.totalBet += currentPlayer.chips;
-                    currentPlayer.chips = 0;
-                    currentPlayer.allIn = true;
-                    currentPlayer.lastAction = 'all-in';
-                } else {
-                    this.pot += callAmount;
-                    currentPlayer.chips -= callAmount;
-                    currentPlayer.currentBet += callAmount;
-                    currentPlayer.totalBet += callAmount;
-                    currentPlayer.lastAction = 'call';
-                }
-                break;
-
-            case 'raise':
-                const raiseAmount = amount;
-                const totalNeeded = this.currentBet + raiseAmount - currentPlayer.currentBet;
+                player.last_action = 'check';
+                console.log(`Player ${player.name} checks`);
+                return { success: true, action: { type: 'check', player: player.name, seatIndex } };
                 
-                if (totalNeeded > currentPlayer.chips) {
+            case 'call':
+                const callAmount = this.currentBet - player.bet;
+                if (callAmount > player.chips) {
+                    // All-in call
+                    this.currentPot += player.chips;
+                    player.bet += player.chips;
+                    player.chips = 0;
+                    player.last_action = 'all-in';
+                } else {
+                    this.currentPot += callAmount;
+                    player.chips -= callAmount;
+                    player.bet += callAmount;
+                    player.last_action = callAmount === 0 ? 'check' : 'call';
+                }
+                console.log(`Player ${player.name} ${player.last_action} ${callAmount}`);
+                return { success: true, action: { type: player.last_action, amount: callAmount, player: player.name, seatIndex } };
+                
+            case 'raise':
+                const raiseAmount = amount - this.currentBet;
+                const totalNeeded = amount - player.bet;
+                
+                if (totalNeeded > player.chips) {
                     return { success: false, error: 'Insufficient chips' };
                 }
-
-                if (raiseAmount < this.bigBlind && currentPlayer.chips > totalNeeded) {
+                
+                if (raiseAmount < this.bigBlind && player.chips > totalNeeded) {
                     return { success: false, error: 'Minimum raise is one big blind' };
                 }
-
-                this.pot += totalNeeded;
-                currentPlayer.chips -= totalNeeded;
-                currentPlayer.currentBet = this.currentBet + raiseAmount;
-                currentPlayer.totalBet += totalNeeded;
-                this.currentBet = currentPlayer.currentBet;
-                currentPlayer.lastAction = `raise ${raiseAmount}`;
                 
-                if (currentPlayer.chips === 0) {
-                    currentPlayer.allIn = true;
+                this.currentPot += totalNeeded;
+                player.chips -= totalNeeded;
+                player.bet = amount;
+                this.currentBet = amount;
+                this.lastRaiseAmountThisRound = raiseAmount;
+                this.lastAggressiveActor = seatIndex;
+                
+                if (player.chips === 0) {
+                    player.last_action = 'all-in';
+                } else {
+                    player.last_action = `raise ${raiseAmount}`;
                 }
-                break;
-
+                
+                console.log(`Player ${player.name} raises to ${amount} (raise of ${raiseAmount})`);
+                return { success: true, action: { type: 'raise', amount: amount, raiseAmount, player: player.name, seatIndex } };
+                
             default:
                 return { success: false, error: 'Invalid action' };
         }
-
-        // Move to next player
-        await this.moveToNextPlayer();
-
-        return actionResult;
     }
 
     async moveToNextPlayer() {
         const activePlayers = this.getActivePlayers();
         
+        // Check if only one player left
         if (activePlayers.length <= 1) {
             await this.endHand();
             return;
         }
-
+        
         // Check if betting round is complete
-        const playersNeedingToAct = activePlayers.filter(p => 
-            p.currentBet < this.currentBet && !p.allIn
-        );
-
+        const playersNeedingToAct = activePlayers.filter(player => {
+            const seatIndex = this.findPlayerSeat(player.user_id);
+            return player.bet < this.currentBet && !player.folded && player.chips > 0;
+        });
+        
         if (playersNeedingToAct.length === 0) {
             await this.moveToNextPhase();
             return;
         }
-
+        
         // Find next active player
-        let nextIndex = (this.currentPlayerIndex + 1) % this.maxPlayers;
+        let nextSeat = (this.actionOn + 1) % 5;
         let attempts = 0;
-
-        while (attempts < this.maxPlayers) {
-            if (this.players.has(nextIndex)) {
-                const player = this.players.get(nextIndex);
-                if (!player.folded && !player.allIn && player.currentBet < this.currentBet) {
-                    this.currentPlayerIndex = nextIndex;
-                    this.startActionTimer();
-                    return;
+        
+        while (attempts < 5) {
+            if (this.players[nextSeat] && !this.players[nextSeat].folded && 
+                this.players[nextSeat].chips > 0 && this.players[nextSeat].bet < this.currentBet) {
+                this.actionOn = nextSeat;
+                this.startActionTimer();
+                
+                // If it's a bot's turn, handle bot decision
+                if (this.players[nextSeat].is_bot) {
+                    await this.handleBotAction(nextSeat);
                 }
+                
+                return;
             }
-            nextIndex = (nextIndex + 1) % this.maxPlayers;
+            nextSeat = (nextSeat + 1) % 5;
             attempts++;
         }
-
-        // If we reach here, move to next phase
+        
+        // If no valid next player found, move to next phase
         await this.moveToNextPhase();
     }
 
     async moveToNextPhase() {
-        // Reset current bets for next round
-        for (const player of this.players.values()) {
-            player.currentBet = 0;
+        // Reset bets for next round
+        for (const player of this.players) {
+            if (player) {
+                player.bet = 0;
+            }
         }
         this.currentBet = 0;
-
-        switch (this.gamePhase) {
+        this.lastRaiseAmountThisRound = 0;
+        
+        switch (this.currentRound) {
             case 'preflop':
-                this.gamePhase = 'flop';
+                this.currentRound = 'flop';
                 this.dealCommunityCards(3);
+                this.rakeEligible = true; // Flop reached
                 break;
             case 'flop':
-                this.gamePhase = 'turn';
+                this.currentRound = 'turn';
                 this.dealCommunityCards(1);
                 break;
             case 'turn':
-                this.gamePhase = 'river';
+                this.currentRound = 'river';
                 this.dealCommunityCards(1);
                 break;
             case 'river':
                 await this.showdown();
                 return;
         }
-
-        // Start betting with first active player after dealer
+        
+        // Set first player to act (first active player after dealer)
         this.setFirstPlayerToAct();
         this.startActionTimer();
+        
+        // If first player is bot, handle bot action
+        if (this.actionOn !== -1 && this.players[this.actionOn] && this.players[this.actionOn].is_bot) {
+            await this.handleBotAction(this.actionOn);
+        }
     }
 
     startActionTimer() {
         if (this.actionTimeout) {
             clearTimeout(this.actionTimeout);
         }
-
+        
         this.actionTimeout = setTimeout(async () => {
-            // Auto-fold the player
-            const currentPlayer = this.getCurrentPlayer();
-            if (currentPlayer) {
-                console.log(`Player ${currentPlayer.username} timed out, auto-folding`);
-                await this.processAction(currentPlayer.userId, 'fold');
+            // Auto-fold the player if they timeout
+            const currentPlayer = this.players[this.actionOn];
+            if (currentPlayer && !currentPlayer.folded) {
+                console.log(`Player ${currentPlayer.name} timed out, auto-folding`);
+                
+                if (currentPlayer.is_bot) {
+                    // This shouldn't happen for bots, but handle it
+                    await this.executeAction(this.actionOn, 'fold', 0);
+                    await this.moveToNextPlayer();
+                } else {
+                    // Auto-fold human player
+                    await this.executeAction(this.actionOn, 'fold', 0);
+                    await this.moveToNextPlayer();
+                }
+                
+                await this.saveToRedis();
             }
         }, this.actionTimeLimit);
     }
 
+    async handleBotAction(seatIndex) {
+        const bot = this.players[seatIndex];
+        if (!bot || !bot.is_bot) return;
+        
+        // Create bot instance for decision making
+        const botPlayer = new BotPlayer(seatIndex, this.tableId, bot.chips);
+        
+        // Get current game state for bot decision
+        const gameState = await this.getGameState();
+        const decision = botPlayer.makeDecision(gameState);
+        
+        // Calculate think time
+        const thinkTime = botPlayer.getThinkTime(decision.action, decision.amount || 0);
+        
+        console.log(`Bot ${bot.name} will ${decision.action} in ${thinkTime.toFixed(1)}s`);
+        
+        // Schedule bot action
+        setTimeout(async () => {
+            if (this.actionOn === seatIndex && !bot.folded) {
+                await this.executeAction(seatIndex, decision.action, decision.amount || 0);
+                await this.moveToNextPlayer();
+                await this.saveToRedis();
+            }
+        }, thinkTime * 1000);
+    }
+
     startNewHand() {
-        if (this.players.size < 2) {
-            this.gamePhase = 'waiting';
+        if (this.countActivePlayers() < 2) {
+            this.activeHand = false;
+            this.currentRound = 'waiting';
             return;
         }
-
+        
+        console.log(`Starting new hand ${this.handNumber + 1} at table ${this.tableId}`);
+        
         this.handNumber++;
-        this.gamePhase = 'preflop';
+        this.activeHand = true;
+        this.currentRound = 'preflop';
         this.deck = new PokerDeck();
         this.deck.shuffle();
         this.communityCards = [];
-        this.pot = 0;
+        this.currentPot = 0;
         this.currentBet = this.bigBlind;
-
+        this.rakeEligible = false;
+        this.handRake = 0;
+        this.playersShowingCards = [];
+        this.lastRaiseAmountThisRound = 0;
+        
         // Reset all players for new hand
-        for (const player of this.players.values()) {
-            player.cards = [];
-            player.currentBet = 0;
-            player.totalBet = 0;
-            player.folded = false;
-            player.allIn = false;
-            player.lastAction = null;
+        for (const player of this.players) {
+            if (player) {
+                player.cards = [];
+                player.bet = 0;
+                player.folded = false;
+                player.last_action = '';
+                player.last_action_amount = 0;
+            }
         }
-
+        
         // Set positions
         this.setPositions();
         
@@ -340,55 +531,65 @@ class PokerGameEngine {
         // Deal hole cards
         this.dealHoleCards();
         
-        // Set first player to act (after big blind)
+        // Set first player to act
         this.setFirstPlayerToAct();
         
         // Start action timer
         this.startActionTimer();
-
-        console.log(`Started new hand ${this.handNumber} at table ${this.tableId}`);
+        
+        // If first player is bot, handle bot action
+        if (this.actionOn !== -1 && this.players[this.actionOn] && this.players[this.actionOn].is_bot) {
+            this.handleBotAction(this.actionOn);
+        }
     }
 
     setPositions() {
-        const playerSeats = Array.from(this.players.keys()).sort((a, b) => a - b);
-        
-        if (playerSeats.length >= 2) {
-            this.dealerIndex = playerSeats[this.handNumber % playerSeats.length];
-            this.smallBlindIndex = playerSeats[(this.handNumber + 1) % playerSeats.length];
-            this.bigBlindIndex = playerSeats[(this.handNumber + 2) % playerSeats.length];
+        const activePlayers = this.getActivePlayerSeats();
+        if (activePlayers.length >= 2) {
+            // Rotate dealer position
+            this.dealerPosition = activePlayers[this.handNumber % activePlayers.length];
         }
     }
 
     postBlinds() {
-        if (this.players.has(this.smallBlindIndex)) {
-            const sbPlayer = this.players.get(this.smallBlindIndex);
+        const activePlayers = this.getActivePlayerSeats();
+        if (activePlayers.length < 2) return;
+        
+        const dealerIndex = activePlayers.indexOf(this.dealerPosition);
+        const sbIndex = activePlayers[(dealerIndex + 1) % activePlayers.length];
+        const bbIndex = activePlayers[(dealerIndex + 2) % activePlayers.length];
+        
+        // Small blind
+        const sbPlayer = this.players[sbIndex];
+        if (sbPlayer) {
             const sbAmount = Math.min(this.smallBlind, sbPlayer.chips);
             sbPlayer.chips -= sbAmount;
-            sbPlayer.currentBet = sbAmount;
-            sbPlayer.totalBet = sbAmount;
-            this.pot += sbAmount;
-            sbPlayer.lastAction = `small blind ${sbAmount}`;
+            sbPlayer.bet = sbAmount;
+            this.currentPot += sbAmount;
+            sbPlayer.last_action = `small blind ${sbAmount}`;
         }
-
-        if (this.players.has(this.bigBlindIndex)) {
-            const bbPlayer = this.players.get(this.bigBlindIndex);
+        
+        // Big blind
+        const bbPlayer = this.players[bbIndex];
+        if (bbPlayer) {
             const bbAmount = Math.min(this.bigBlind, bbPlayer.chips);
             bbPlayer.chips -= bbAmount;
-            bbPlayer.currentBet = bbAmount;
-            bbPlayer.totalBet = bbAmount;
-            this.pot += bbAmount;
-            bbPlayer.lastAction = `big blind ${bbAmount}`;
+            bbPlayer.bet = bbAmount;
+            this.currentPot += bbAmount;
+            bbPlayer.last_action = `big blind ${bbAmount}`;
         }
     }
 
     dealHoleCards() {
-        const playerSeats = Array.from(this.players.keys()).sort((a, b) => a - b);
+        const activePlayers = this.getActivePlayerSeats();
         
-        // Deal 2 cards to each player
-        for (let i = 0; i < 2; i++) {
-            for (const seat of playerSeats) {
-                const player = this.players.get(seat);
-                player.cards.push(this.deck.deal());
+        // Deal 2 cards to each active player
+        for (let cardNum = 0; cardNum < 2; cardNum++) {
+            for (const seatIndex of activePlayers) {
+                const player = this.players[seatIndex];
+                if (player) {
+                    player.cards.push(this.deck.deal());
+                }
             }
         }
     }
@@ -397,69 +598,88 @@ class PokerGameEngine {
         for (let i = 0; i < count; i++) {
             this.communityCards.push(this.deck.deal());
         }
+        console.log(`Dealt ${count} community cards, total: ${this.communityCards.length}`);
     }
 
     setFirstPlayerToAct() {
-        const playerSeats = Array.from(this.players.keys()).sort((a, b) => a - b);
+        const activePlayers = this.getActivePlayerSeats();
         
-        if (this.gamePhase === 'preflop') {
+        if (this.currentRound === 'preflop') {
             // First to act is player after big blind
-            const bbIndex = playerSeats.indexOf(this.bigBlindIndex);
-            const firstActorSeat = playerSeats[(bbIndex + 1) % playerSeats.length];
-            this.currentPlayerIndex = firstActorSeat;
+            const dealerIndex = activePlayers.indexOf(this.dealerPosition);
+            const bbIndex = activePlayers[(dealerIndex + 2) % activePlayers.length];
+            const firstActorIndex = (bbIndex + 1) % activePlayers.length;
+            this.actionOn = activePlayers[firstActorIndex];
         } else {
             // Post-flop, first to act is first active player after dealer
-            const dealerIdx = playerSeats.indexOf(this.dealerIndex);
-            let nextIdx = (dealerIdx + 1) % playerSeats.length;
+            const dealerIndex = activePlayers.indexOf(this.dealerPosition);
+            let nextIndex = (dealerIndex + 1) % activePlayers.length;
             
-            while (nextIdx !== dealerIdx) {
-                const seat = playerSeats[nextIdx];
-                const player = this.players.get(seat);
-                if (!player.folded && !player.allIn) {
-                    this.currentPlayerIndex = seat;
+            // Find first non-folded, non-all-in player
+            for (let i = 0; i < activePlayers.length; i++) {
+                const seatIndex = activePlayers[nextIndex];
+                const player = this.players[seatIndex];
+                if (player && !player.folded && player.chips > 0) {
+                    this.actionOn = seatIndex;
                     break;
                 }
-                nextIdx = (nextIdx + 1) % playerSeats.length;
+                nextIndex = (nextIndex + 1) % activePlayers.length;
             }
         }
     }
 
-    getCurrentPlayer() {
-        return this.players.get(this.currentPlayerIndex);
-    }
-
-    getActivePlayers() {
-        return Array.from(this.players.values()).filter(p => !p.folded);
-    }
-
     async showdown() {
-        this.gamePhase = 'showdown';
+        this.currentRound = 'showdown';
+        this.actionOn = -1;
         
         const activePlayers = this.getActivePlayers();
         const winners = this.determineWinners(activePlayers);
         
-        // Distribute pot
-        const winAmount = Math.floor(this.pot / winners.length);
+        // Calculate rake (10% matching frontend)
+        let rake = 0;
+        if (this.rakeEligible && this.currentPot > 0) {
+            rake = Math.floor(this.currentPot * 0.1);
+            this.handRake = rake;
+            this.totalRake += rake;
+        }
+        
+        // Distribute pot after rake
+        const potAfterRake = this.currentPot - rake;
+        const winAmount = Math.floor(potAfterRake / winners.length);
+        
         for (const winner of winners) {
             winner.chips += winAmount;
         }
-
-        // Record hand results
-        await this.recordHandResults(winners);
-
+        
+        // Broadcast showdown results
+        const winnerInfo = {
+            winner_index: this.findPlayerSeat(winners[0].user_id),
+            hand_description: this.getHandDescription(winners[0]),
+            pot_amount: potAfterRake,
+            rake: rake
+        };
+        
+        console.log(`Hand ${this.handNumber} complete. Winner: ${winners[0].name}, pot: ${potAfterRake}`);
+        
         // Schedule next hand
         setTimeout(() => {
             this.startNewHand();
         }, 5000);
+        
+        return winnerInfo;
     }
 
     determineWinners(players) {
+        if (players.length === 1) {
+            return players;
+        }
+        
         let bestHandValue = -1;
         let winners = [];
-
+        
         for (const player of players) {
-            const hand = new PokerHand(player.cards.concat(this.communityCards));
-            const handValue = hand.getValue();
+            const handInfo = HandEvaluator.evaluateHand(player.cards, this.communityCards);
+            const handValue = this.getHandValue(handInfo);
             
             if (handValue > bestHandValue) {
                 bestHandValue = handValue;
@@ -468,104 +688,114 @@ class PokerGameEngine {
                 winners.push(player);
             }
         }
-
+        
         return winners;
     }
 
-    async recordHandResults(winners) {
-        // Implementation for recording hand results to database
-        // This would integrate with your existing poker.js routes
+    getHandValue(handInfo) {
+        // Convert hand rank and values to comparable number
+        return handInfo.rank * 100000 + (handInfo.values[0] || 0) * 1000 + (handInfo.values[1] || 0);
+    }
+
+    getHandDescription(player) {
+        const handInfo = HandEvaluator.evaluateHand(player.cards, this.communityCards);
+        return HandEvaluator.handRankToString(handInfo);
+    }
+
+    async endHand() {
+        this.activeHand = false;
+        this.currentRound = 'waiting';
+        this.actionOn = -1;
+        
+        if (this.actionTimeout) {
+            clearTimeout(this.actionTimeout);
+            this.actionTimeout = null;
+        }
+        
+        // Award pot to remaining player
+        const activePlayers = this.getActivePlayers();
+        if (activePlayers.length === 1) {
+            activePlayers[0].chips += this.currentPot;
+            
+            console.log(`Hand ended early. ${activePlayers[0].name} wins ${this.currentPot}`);
+            
+            // Schedule next hand
+            setTimeout(() => {
+                this.startNewHand();
+            }, 3000);
+        }
+        
+        await this.saveToRedis();
     }
 
     async handlePlayerDisconnect(userId) {
-        const player = Array.from(this.players.values()).find(p => p.userId === userId);
-        if (player) {
-            player.connected = false;
-            // Implement disconnect logic (auto-fold, sit out, etc.)
-            if (this.currentPlayerIndex === player.seatIndex && this.gamePhase !== 'waiting') {
-                await this.processAction(userId, 'fold');
+        const playerSeat = this.findPlayerSeat(userId);
+        if (playerSeat !== -1) {
+            const player = this.players[playerSeat];
+            if (player) {
+                player.sitting_out = true;
+                
+                // If it's their turn and hand is active, auto-fold
+                if (this.activeHand && this.actionOn === playerSeat) {
+                    await this.executeAction(playerSeat, 'fold', 0);
+                    await this.moveToNextPlayer();
+                }
             }
         }
+    }
+
+    // Utility methods
+    countActivePlayers() {
+        return this.players.filter(p => p !== null).length;
+    }
+
+    getActivePlayers() {
+        return this.players.filter(p => p !== null && !p.folded);
+    }
+
+    getActivePlayerSeats() {
+        const seats = [];
+        for (let i = 0; i < this.players.length; i++) {
+            if (this.players[i] !== null) {
+                seats.push(i);
+            }
+        }
+        return seats.sort((a, b) => a - b);
+    }
+
+    findPlayerSeat(userId) {
+        for (let i = 0; i < this.players.length; i++) {
+            if (this.players[i] && this.players[i].user_id === userId) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     async getGameState() {
         return {
             tableId: this.tableId,
-            gamePhase: this.gamePhase,
-            players: Array.from(this.players.entries()).map(([seat, player]) => ({
-                seatIndex: seat,
-                username: player.username,
-                chips: player.chips,
-                cards: player.cards, // Only send to specific player in real implementation
-                currentBet: player.currentBet,
-                folded: player.folded,
-                allIn: player.allIn,
-                lastAction: player.lastAction,
-                connected: player.connected
-            })),
-            communityCards: this.communityCards,
-            pot: this.pot,
-            currentBet: this.currentBet,
-            currentPlayerIndex: this.currentPlayerIndex,
-            dealerIndex: this.dealerIndex,
-            handNumber: this.handNumber
+            stakeLevel: this.stakeLevel,
+            gamePhase: this.currentRound,
+            active_hand: this.activeHand,
+            players: this.players.map((player, index) => {
+                if (!player) return null;
+                return {
+                    ...player,
+                    seatIndex: index
+                };
+            }),
+            dealer_position: this.dealerPosition,
+            current_pot: this.currentPot,
+            current_bet: this.currentBet,
+            community_cards: this.communityCards,
+            action_on: this.actionOn,
+            hand_number: this.handNumber,
+            last_raise_amount_this_round: this.lastRaiseAmountThisRound,
+            rake_eligible: this.rakeEligible,
+            total_rake: this.totalRake,
+            hand_rake: this.handRake
         };
-    }
-
-    serializeGameState() {
-        return {
-            tableId: this.tableId,
-            players: Array.from(this.players.entries()),
-            communityCards: this.communityCards,
-            pot: this.pot,
-            currentBet: this.currentBet,
-            gamePhase: this.gamePhase,
-            currentPlayerIndex: this.currentPlayerIndex,
-            dealerIndex: this.dealerIndex,
-            smallBlindIndex: this.smallBlindIndex,
-            bigBlindIndex: this.bigBlindIndex,
-            handNumber: this.handNumber,
-            smallBlind: this.smallBlind,
-            bigBlind: this.bigBlind
-        };
-    }
-
-    deserializeGameState(gameState) {
-        this.tableId = gameState.tableId;
-        this.players = new Map(gameState.players);
-        this.communityCards = gameState.communityCards || [];
-        this.pot = gameState.pot || 0;
-        this.currentBet = gameState.currentBet || 0;
-        this.gamePhase = gameState.gamePhase || 'waiting';
-        this.currentPlayerIndex = gameState.currentPlayerIndex || -1;
-        this.dealerIndex = gameState.dealerIndex || 0;
-        this.smallBlindIndex = gameState.smallBlindIndex || -1;
-        this.bigBlindIndex = gameState.bigBlindIndex || -1;
-        this.handNumber = gameState.handNumber || 0;
-        this.smallBlind = gameState.smallBlind || 50;
-        this.bigBlind = gameState.bigBlind || 100;
-    }
-
-    async endGame() {
-        this.gamePhase = 'waiting';
-        if (this.actionTimeout) {
-            clearTimeout(this.actionTimeout);
-            this.actionTimeout = null;
-        }
-        await this.saveToRedis();
-    }
-
-    async endHand() {
-        const activePlayers = this.getActivePlayers();
-        if (activePlayers.length === 1) {
-            // Single winner
-            activePlayers[0].chips += this.pot;
-            await this.recordHandResults(activePlayers);
-            
-            setTimeout(() => {
-                this.startNewHand();
-            }, 3000);
-        }
     }
 }
 
