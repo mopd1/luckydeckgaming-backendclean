@@ -213,13 +213,13 @@ router.post('/validate-apple-receipt', authenticateToken, async (req, res) => {
     try {
         transaction = await sequelize.transaction();
         
-        const { receipt, product_id } = req.body;
+        const { receiptData, productId, transactionId, packageId, environment } = req.body;
         const userId = req.user.id;
         
-        console.log('Validating Apple receipt for user:', userId, 'product:', product_id);
+        console.log('Validating Apple receipt for user:', userId, 'product:', productId, 'package:', packageId);
         
         // Validate receipt with Apple
-        const appleValidation = await validateAppleReceipt(receipt);
+        const appleValidation = await validateAppleReceipt(receiptData);
         
         if (!appleValidation.valid) {
             throw new Error('Invalid Apple receipt: ' + appleValidation.error);
@@ -227,7 +227,7 @@ router.post('/validate-apple-receipt', authenticateToken, async (req, res) => {
         
         // Check if this transaction was already processed
         const existingTransaction = await StoreTransaction.findOne({
-            where: { apple_transaction_id: appleValidation.transaction_id },
+            where: { apple_transaction_id: transactionId },
             transaction
         });
         
@@ -235,10 +235,10 @@ router.post('/validate-apple-receipt', authenticateToken, async (req, res) => {
             throw new Error('Transaction already processed');
         }
         
-        // Map Apple product ID to your package
-        const packageInfo = getPackageFromAppleProductId(product_id);
-        if (!packageInfo) {
-            throw new Error('Invalid product ID: ' + product_id);
+        // Get package info from database using packageId
+        const packageItem = await Package.findByPk(packageId, { transaction });
+        if (!packageItem || !packageItem.active) {
+            throw new Error('Package not found or not active');
         }
         
         // Find and update user balance
@@ -247,8 +247,8 @@ router.post('/validate-apple-receipt', authenticateToken, async (req, res) => {
             throw new Error('User not found');
         }
         
-        const newChipBalance = user.balance + packageInfo.chips;
-        const newGemBalance = user.gems + packageInfo.gems;
+        const newChipBalance = user.balance + packageItem.chips;
+        const newGemBalance = user.gems + packageItem.gems;
         
         await user.update({
             balance: newChipBalance,
@@ -258,19 +258,19 @@ router.post('/validate-apple-receipt', authenticateToken, async (req, res) => {
         // Create store transaction record
         const storeTransaction = await StoreTransaction.create({
             user_id: userId,
-            chips_added: packageInfo.chips,
-            gems_added: packageInfo.gems,
+            chips_added: packageItem.chips,
+            gems_added: packageItem.gems,
             type: 'apple_iap',
-            price: packageInfo.price,
-            apple_product_id: product_id,
-            apple_transaction_id: appleValidation.transaction_id,
+            price: packageItem.price,
+            apple_product_id: productId,
+            apple_transaction_id: transactionId,
             timestamp: new Date()
         }, { transaction });
         
         // Create revenue transaction record
         const revenueTransaction = await RevenueTransaction.create({
             user_id: userId,
-            amount: packageInfo.price,
+            amount: packageItem.price,
             type: 'apple_iap',
             timestamp: new Date()
         }, { transaction });
@@ -284,7 +284,9 @@ router.post('/validate-apple-receipt', authenticateToken, async (req, res) => {
         
         res.json({
             success: true,
-            new_balance: newChipBalance,
+            packageId: packageId,
+            chipsAmount: packageItem.chips,
+            newBalance: newChipBalance,
             new_gems: newGemBalance,
             message: 'Purchase validated and processed successfully'
         });
@@ -294,10 +296,11 @@ router.post('/validate-apple-receipt', authenticateToken, async (req, res) => {
         console.error('Apple receipt validation error:', error.message);
         res.status(400).json({
             success: false,
-            message: error.message || 'Failed to validate Apple receipt'
+            error: error.message || 'Failed to validate Apple receipt'
         });
     }
 });
+      
 
 function validateAppleReceipt(receiptData) {
     return new Promise((resolve, reject) => {

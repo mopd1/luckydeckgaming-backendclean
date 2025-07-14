@@ -70,22 +70,6 @@ const initializePassport = require('./config/passport');
 const configuredPassport = initializePassport(User);
 app.use(configuredPassport.initialize());
 
-// Add a Redis health check route
-app.get('/health/redis', (req, res) => {
-  try {
-    redisClient.ping((err, result) => {
-      if (err) {
-        console.error('Redis health check failed:', err);
-        return res.status(500).json({ status: 'unhealthy', message: 'Redis connection failed' });
-      }
-      res.json({ status: 'healthy', redis: 'connected', result });
-    });
-  } catch (error) {
-    console.error('Redis health check error:', error);
-    res.status(500).json({ status: 'error', message: error.message });
-  }
-});
-
 // Handle favicon requests
 app.get('/favicon.ico', (req, res) => {
     res.status(204).end();
@@ -172,6 +156,23 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+app.get('/test-redis', async (req, res) => {
+    try {
+        await redisClient.setex('test_key', 60, 'test_value');
+        const value = await redisClient.get('test_key');
+        res.json({ 
+            success: true, 
+            redis_working: value === 'test_value',
+            message: 'Redis connection is working'
+        });
+    } catch (error) {
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
 // Routes without rate limiting
 app.use('/api/auth', authRoutes);
 app.use('/api/assets', assetsRouter);
@@ -200,9 +201,35 @@ app.use('/api/leaderboards', leaderboardRoutes);
 // Default routes without rate limiting
 app.use('/api', indexRoutes);
 
-// Welcome route - no rate limit
+// Root health check endpoint for Elastic Beanstalk
 app.get('/', (req, res) => {
-    res.send('Welcome to Lucky Deck Gaming!');
+    res.status(200).json({ 
+        status: 'healthy', 
+        service: 'Lucky Deck Gaming API',
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV || 'development'
+    });
+});
+
+// Redis test endpoint (temporary)
+app.get('/test-redis', async (req, res) => {
+    try {
+        await redisClient.setex('test_key', 60, 'test_value');
+        const value = await redisClient.get('test_key');
+        res.json({ 
+            success: true, 
+            redis_working: value === 'test_value',
+            message: 'Redis connection is working',
+            redis_host: process.env.REDIS_HOST,
+            test_result: value
+        });
+    } catch (error) {
+        res.status(500).json({ 
+            success: false, 
+            error: error.message,
+            redis_host: process.env.REDIS_HOST
+        });
+    }
 });
 
 // Error handling for CORS errors
