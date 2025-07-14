@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 const authRoutes = require('./authRoutes');
-const googleAuthRoutes = require('./googleAuthRoutes');
+//const googleAuthRoutes = require('./googleAuthRoutes');
 const userRoutes = require('./userRoutes');
 const gameRoutes = require('./gameRoutes');
 const gameSessionRoutes = require('./gameSessionRoutes');
@@ -17,7 +17,7 @@ router.get('/', (req, res) => {
   res.send('API is working');
 });
 router.use('/auth', authRoutes);
-router.use('/auth', googleAuthRoutes);
+//router.use.*googleAuthRoutes);
 router.use('/users', userRoutes);
 router.use('/games', gameRoutes);
 router.use('/game-sessions', gameSessionRoutes);

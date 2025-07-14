@@ -23,7 +23,7 @@ const seasonPassRoutes = require('./routes/seasonPassRoutes');
 const { scheduleSeasonCreation } = require('./utils/seasonAutoCreation');
 const packageRoutes = require('./routes/packageRoutes');
 const crmRoutes = require('./routes/crmRoutes');
-const avatarCompositeRoutes = require('./routes/avatarCompositeRoutes');
+//const avatarCompositeRoutes = require('./routes/avatarCompositeRoutes');
 const leaderboardRoutes = require('./routes/leaderboards');
 const { scheduleDailyLeaderboardReset } = require('./services/leaderboardService');
 const { redisClient } = require('./services/redisClient');
@@ -246,7 +246,7 @@ app.get('/test-redis', async (req, res) => {
 // Routes without rate limiting
 app.use('/api/auth', authRoutes);
 app.use('/api/assets', assetsRouter);
-app.use('/api/avatar', avatarCompositeRoutes);
+//app.use.*avatarCompositeRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/games', gameRoutes);
 app.use('/api/poker', pokerRoutes);
