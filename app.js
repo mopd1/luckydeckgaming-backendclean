@@ -158,17 +158,28 @@ app.get('/api/health', (req, res) => {
 
 app.get('/test-redis', async (req, res) => {
     try {
-        await redisClient.setex('test_key', 60, 'test_value');
-        const value = await redisClient.get('test_key');
+        const testKey = `test_${Date.now()}`;
+        await redisClient.setex(testKey, 60, 'test_value');
+        const value = await redisClient.get(testKey);
+        await redisClient.del(testKey); // Clean up
+        
         res.json({ 
             success: true, 
             redis_working: value === 'test_value',
-            message: 'Redis connection is working'
+            message: 'Redis connection is working',
+            redis_host: process.env.REDIS_HOST || 'not_set',
+            redis_port: process.env.REDIS_PORT || 'not_set',
+            environment: process.env.NODE_ENV || 'development',
+            timestamp: new Date().toISOString()
         });
     } catch (error) {
         res.status(500).json({ 
             success: false, 
-            error: error.message 
+            error: error.message,
+            redis_host: process.env.REDIS_HOST || 'not_set',
+            redis_port: process.env.REDIS_PORT || 'not_set',
+            environment: process.env.NODE_ENV || 'development',
+            timestamp: new Date().toISOString()
         });
     }
 });
@@ -209,27 +220,6 @@ app.get('/', (req, res) => {
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV || 'development'
     });
-});
-
-// Redis test endpoint (temporary)
-app.get('/test-redis', async (req, res) => {
-    try {
-        await redisClient.setex('test_key', 60, 'test_value');
-        const value = await redisClient.get('test_key');
-        res.json({ 
-            success: true, 
-            redis_working: value === 'test_value',
-            message: 'Redis connection is working',
-            redis_host: process.env.REDIS_HOST,
-            test_result: value
-        });
-    } catch (error) {
-        res.status(500).json({ 
-            success: false, 
-            error: error.message,
-            redis_host: process.env.REDIS_HOST
-        });
-    }
 });
 
 // Error handling for CORS errors

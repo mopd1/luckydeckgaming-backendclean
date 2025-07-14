@@ -3,6 +3,7 @@ const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');  // Import specific function
 const db = require('../models');
 const gradingService = require('../services/gradingService'); // Import grading service
+const tableManager = require('../services/tableManager');
 
 // Simple test route
 router.get('/test', (req, res) => {
@@ -290,6 +291,119 @@ router.post('/update-grading', authenticateToken, function(req, res) {
         error: 'Failed to update player grading'
       });
     });
+});
+
+// Get available tables for a stake level
+router.get('/tables/:stakeLevel', authenticateToken, async function(req, res) {
+    try {
+        const stakeLevel = parseInt(req.params.stakeLevel);
+        const tables = await tableManager.getTableList(stakeLevel);
+        
+        res.json({
+            success: true,
+            stakeLevel: stakeLevel,
+            tables: tables
+        });
+    } catch (error) {
+        console.error('Error getting tables:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to get tables'
+        });
+    }
+});
+
+// Join a table (find available seat)
+router.post('/join-table', authenticateToken, async function(req, res) {
+    try {
+        const userId = req.user.id;
+        const { stakeLevel, buyinAmount } = req.body;
+        
+        if (!stakeLevel || !buyinAmount) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required fields: stakeLevel, buyinAmount'
+            });
+        }
+
+        // Find or create table
+        const tableInfo = await tableManager.findOrCreateTable(stakeLevel, userId);
+        
+        if (!tableInfo) {
+            return res.status(404).json({
+                success: false,
+                error: 'No available tables'
+            });
+        }
+
+        // Assign seat to player
+        const seatAssignment = await tableManager.assignSeatToPlayer(
+            tableInfo.tableId, 
+            userId, 
+            req.user.username || `User${userId}`, 
+            buyinAmount
+        );
+
+        if (!seatAssignment.success) {
+            return res.status(400).json({
+                success: false,
+                error: seatAssignment.error
+            });
+        }
+
+        res.json({
+            success: true,
+            tableId: tableInfo.tableId,
+            seatIndex: seatAssignment.seatIndex,
+            stakeLevel: tableInfo.stakeLevel,
+            message: 'Successfully joined table'
+        });
+
+    } catch (error) {
+        console.error('Error joining table:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to join table'
+        });
+    }
+});
+
+// Get table info
+router.get('/table/:tableId', authenticateToken, async function(req, res) {
+    try {
+        const tableId = req.params.tableId;
+        const tablePattern = `poker:table:*:${tableId}`;
+        const tableKeys = await redisClient.keys(tablePattern);
+        
+        if (tableKeys.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Table not found'
+            });
+        }
+
+        const tableData = await redisClient.get(tableKeys[0]);
+        const table = JSON.parse(tableData);
+
+        res.json({
+            success: true,
+            table: {
+                tableId: table.tableId,
+                stakeLevel: table.stakeLevel,
+                gamePhase: table.gamePhase,
+                playerCount: tableManager.countHumanPlayers(table),
+                smallBlind: table.smallBlind,
+                bigBlind: table.bigBlind
+            }
+        });
+
+    } catch (error) {
+        console.error('Error getting table info:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to get table info'
+        });
+    }
 });
 
 module.exports = router;
