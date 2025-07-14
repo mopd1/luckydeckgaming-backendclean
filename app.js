@@ -62,7 +62,66 @@ app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
 // Initialize WebSocket after middleware
-const wss = new PokerWebSocketServer(server);
+console.log('🚀 Starting PokerWebSocketServer initialization...');
+
+let wss;
+try {
+    console.log('📦 Loading PokerWebSocketServer module...');
+    const PokerWebSocketServer = require('./src/websocket/PokerWebSocketServer');
+    console.log('✅ PokerWebSocketServer module loaded successfully');
+    
+    console.log('🔌 Creating PokerWebSocketServer instance...');
+    wss = new PokerWebSocketServer(server);
+    console.log('✅ PokerWebSocketServer instance created successfully');
+    
+    console.log('🎮 PokerWebSocketServer fully initialized and ready');
+} catch (error) {
+    console.error('❌ CRITICAL ERROR: PokerWebSocketServer failed to initialize:', error);
+    console.error('📍 Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+    });
+    
+    // Fallback to basic WebSocket for debugging
+    console.log('🔄 Falling back to basic WebSocket server...');
+    try {
+        const WebSocket = require('ws');
+        wss = new WebSocket.Server({ 
+            server: server,
+            verifyClient: (info) => {
+                console.log('🔍 WebSocket connection attempt from:', info.origin);
+                return true; // Accept all connections for testing
+            }
+        });
+        
+        wss.on('connection', (ws, request) => {
+            console.log('✅ Basic WebSocket connection established');
+            
+            ws.on('message', (message) => {
+                console.log('📨 Received message:', message.toString());
+                ws.send(JSON.stringify({ 
+                    type: 'echo', 
+                    message: 'Hello from fallback WebSocket!',
+                    received: message.toString(),
+                    timestamp: new Date().toISOString()
+                }));
+            });
+            
+            // Send welcome message
+            ws.send(JSON.stringify({ 
+                type: 'welcome', 
+                message: 'Fallback WebSocket connected successfully!',
+                timestamp: new Date().toISOString()
+            }));
+        });
+        
+        console.log('✅ Fallback WebSocket server started successfully');
+    } catch (fallbackError) {
+        console.error('❌ FATAL: Even fallback WebSocket failed:', fallbackError);
+        throw fallbackError;
+    }
+}
 
 // Import models and initialize passport
 const { User } = require('./models');
