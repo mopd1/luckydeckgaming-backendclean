@@ -1,27 +1,24 @@
-const winston = require('winston');
-
-const logger = winston.createLogger({
-    level: 'info',
-    format: winston.format.combine(
-        winston.format.timestamp(),
-        winston.format.json()
-    ),
-    transports: [
-        new winston.transports.File({ 
-            filename: 'logs/websocket-error.log', 
-            level: 'error' 
-        }),
-        new winston.transports.File({ 
-            filename: 'logs/websocket.log' 
-        })
-    ]
-});
-
-// Also log to console in development
-if (process.env.NODE_ENV !== 'production') {
-    logger.add(new winston.transports.Console({
-        format: winston.format.simple()
-    }));
-}
+// src/websocket/logger.js
+const logger = {
+    info: (message, ...args) => {
+        const timestamp = new Date().toISOString();
+        console.log(`[${timestamp}] [WEBSOCKET INFO] ${message}`, ...args);
+    },
+    error: (message, ...args) => {
+        const timestamp = new Date().toISOString();
+        console.error(`[${timestamp}] [WEBSOCKET ERROR] ${message}`, ...args);
+    },
+    warn: (message, ...args) => {
+        const timestamp = new Date().toISOString();
+        console.warn(`[${timestamp}] [WEBSOCKET WARN] ${message}`, ...args);
+    },
+    debug: (message, ...args) => {
+        if (process.env.NODE_ENV !== 'production') {
+            const timestamp = new Date().toISOString();
+            console.debug(`[${timestamp}] [WEBSOCKET DEBUG] ${message}`, ...args);
+        }
+    }
+};
 
 module.exports = logger;
+
