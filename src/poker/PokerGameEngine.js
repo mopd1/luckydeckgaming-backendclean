@@ -108,9 +108,25 @@ class PokerGameEngine {
         if (gameState.bots && Array.isArray(gameState.bots)) {
             for (const [seatIndex, botData] of gameState.bots) {
                 if (botData && seatIndex >= 0 && seatIndex < 5) {
-                    botData.is_bot = true;
-                    botData.isBot = true;
-                    this.players[seatIndex] = botData;
+                    // Ensure consistent bot data structure
+                    const normalizedBotData = {
+                        user_id: botData.userId,
+                        name: botData.username,
+                        chips: botData.chips,
+                        bet: 0,
+                        folded: false,
+                        sitting_out: false,
+                        cards: [],
+                        auto_post_blinds: true,
+                        last_action: "",
+                        last_action_amount: 0,
+                        time_bank: 30.0,
+                        avatar_data: {},
+                        is_bot: true,
+                        isBot: true, // Keep both for compatibility
+                        seatIndex: seatIndex
+                    };
+                    this.players[seatIndex] = normalizedBotData;
                 }
             }
         }
@@ -199,14 +215,6 @@ class PokerGameEngine {
         };
         
         this.players[seatIndex] = playerData;
-        
-        // Start game if we have enough players and not currently in a hand
-        if (!this.activeHand && this.countActivePlayers() >= 2) {
-            // Wait a moment then start new hand
-            setTimeout(() => {
-                this.startNewHand();
-            }, 3000);
-        }
         
         await this.saveToRedis();
         
@@ -748,7 +756,14 @@ class PokerGameEngine {
 
     // Utility methods
     countActivePlayers() {
-        return this.players.filter(p => p !== null).length;
+        let count = 0;
+        for (let i = 0; i < this.players.length; i++) {
+            if (this.players[i] !== null && !this.players[i].sitting_out) {
+                count++;
+            }
+        }
+        console.log(`PokerGameEngine: Counted ${count} active players at table ${this.tableId}`);
+        return count;
     }
 
     getActivePlayers() {

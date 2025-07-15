@@ -283,6 +283,24 @@ class PokerWebSocketServer {
                 gameState: await gameEngine.getGameState()
             });
 
+            // Check if we should start a hand (2+ players and no active hand)
+            if (gameEngine.countActivePlayers() >= 2 && !gameEngine.activeHand) {
+                console.log(`Table ${targetTable.tableId} has ${gameEngine.countActivePlayers()} players, starting hand in 3 seconds`);
+                setTimeout(async () => {
+                    if (gameEngine.countActivePlayers() >= 2 && !gameEngine.activeHand) {
+                        gameEngine.startNewHand();
+                        // Broadcast the updated game state after hand starts
+                        await this.broadcastToTable(targetTable.tableId, {
+                            type: MessageTypes.SERVER.GAME_STATE,
+                            data: {
+                                event: 'hand_started',
+                                gameState: await gameEngine.getGameState()
+                            }
+                        });
+                    }
+                }, 3000);
+            }
+
             // Notify all players in the table
             await this.broadcastToTable(targetTable.tableId, {
                 type: MessageTypes.SERVER.GAME_STATE,

@@ -5,11 +5,11 @@ const { v4: uuidv4 } = require('uuid');
 class TableManager {
     constructor() {
         this.stakelevels = {
-            1: { smallBlind: 50, bigBlind: 100, minBuyin: 2000, maxBuyin: 10000 },
-            2: { smallBlind: 100, bigBlind: 200, minBuyin: 4000, maxBuyin: 20000 },
-            3: { smallBlind: 250, bigBlind: 500, minBuyin: 10000, maxBuyin: 50000 },
-            4: { smallBlind: 500, bigBlind: 1000, minBuyin: 20000, maxBuyin: 100000 },
-            5: { smallBlind: 1000, bigBlind: 2000, minBuyin: 40000, maxBuyin: 200000 }
+            1: { smallBlind: 5, bigBlind: 10, minBuyin: 500, maxBuyin: 1000 },
+            2: { smallBlind: 25, bigBlind: 50, minBuyin: 2500, maxBuyin: 5000 },
+            3: { smallBlind: 50, bigBlind: 100, minBuyin: 5000, maxBuyin: 10000 },
+            4: { smallBlind: 250, bigBlind: 500, minBuyin: 25000, maxBuyin: 50000 },
+            5: { smallBlind: 500, bigBlind: 1000, minBuyin: 50000, maxBuyin: 100000 }
         };
         this.maxPlayersPerTable = 5;
         this.maxHumanPlayers = 2; // 2 humans + 3 bots
@@ -95,7 +95,7 @@ class TableManager {
         return {
             tableId: tableId,
             stakeLevel: parseInt(stakeLevel),
-            availableSeats: [0, 1, 2, 3, 4], // All seats available initially
+            availableSeats: this.getAvailableSeats(tableData),
             humanPlayerCount: 0
         };
     }
@@ -110,7 +110,7 @@ class TableManager {
                 userId: botId,
                 username: botNames[i],
                 isBot: true,
-                chips: 10000, // Standard bot buyin
+                chips: this.maxBuyin, // Standard bot buyin
                 cards: [],
                 currentBet: 0,
                 totalBet: 0,
@@ -146,6 +146,7 @@ class TableManager {
         // Check human players
         if (table.players) {
             const players = table.players instanceof Map ? table.players : new Map(table.players);
+            console.log('DEBUG: Human players:', Array.from(players.entries()));
             for (const [seatIndex] of players) {
                 occupiedSeats.add(seatIndex);
             }
@@ -154,14 +155,20 @@ class TableManager {
         // Check bots
         if (table.bots) {
             const bots = table.bots instanceof Map ? table.bots : new Map(table.bots);
+            console.log('DEBUG: Bots:', Array.from(bots.entries()));
             for (const [seatIndex] of bots) {
                 occupiedSeats.add(seatIndex);
             }
         }
+        
+        console.log('DEBUG: Occupied seats:', Array.from(occupiedSeats));
 
         // Return available human seats (0 and 1)
         const humanSeats = [0, 1];
-        return humanSeats.filter(seat => !occupiedSeats.has(seat));
+        const availableSeats = humanSeats.filter(seat => !occupiedSeats.has(seat));
+        console.log('DEBUG: Available seats:', availableSeats);
+    
+        return availableSeats;
     }
 
     async assignSeatToPlayer(tableId, userId, username, buyinAmount) {
