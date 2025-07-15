@@ -15,7 +15,7 @@ const http = require('http');
 const server = http.createServer(app);
 const PokerWebSocketServer = require('./src/websocket/PokerWebSocketServer');
 const helmet = require('helmet');
-const port = process.env.PORT || 8080;
+const port = process.env.PORT || 8081;
 const passport = require('passport');
 const assetsRouter = require('./routes/assets');
 const dailyTaskRoutes = require('./routes/dailyTaskRoutes');
@@ -37,6 +37,30 @@ if (process.env.NODE_ENV === 'production') {
 
 // Body parsing middleware must come first
 app.use(express.json({ limit: '1mb' }));
+
+app.use((req, res, next) => {
+    const isWebSocketRequest = req.headers.upgrade === 'websocket' || 
+                               req.headers.connection?.toLowerCase().includes('upgrade');
+    
+    if (isWebSocketRequest) {
+        console.log('🔄 NEW WEBSOCKET UPGRADE REQUEST DETECTED:');
+        console.log('--- WebSocket Request Details ---');
+        console.log('Timestamp:', new Date().toISOString());
+        console.log('Method:', req.method);
+        console.log('URL:', req.originalUrl);
+        console.log('Query:', req.query);
+        console.log('Upgrade Header:', req.headers.upgrade);
+        console.log('Connection Header:', req.headers.connection);
+        console.log('WebSocket Key:', req.headers['sec-websocket-key']);
+        console.log('WebSocket Version:', req.headers['sec-websocket-version']);
+        console.log('Origin:', req.headers.origin);
+        console.log('User-Agent:', req.headers['user-agent']);
+        console.log('IP:', req.ip);
+        console.log('All Headers:', JSON.stringify(req.headers, null, 2));
+        console.log('--------------------------------');
+    }
+    next();
+});
 
 // Enhanced WebSocket debugging middleware
 app.use((req, res, next) => {
