@@ -108,6 +108,8 @@ class PokerGameEngine {
         if (gameState.bots && Array.isArray(gameState.bots)) {
             for (const [seatIndex, botData] of gameState.bots) {
                 if (botData && seatIndex >= 0 && seatIndex < 5) {
+                    botData.is_bot = true;
+                    botData.isBot = true;
                     this.players[seatIndex] = botData;
                 }
             }
@@ -134,7 +136,7 @@ class PokerGameEngine {
         
         for (let i = 0; i < this.players.length; i++) {
             if (this.players[i]) {
-                if (this.players[i].is_bot) {
+                if (this.players[i].isBot || this.players[i].is_bot) {
                     botEntries.push([i, this.players[i]]);
                 } else {
                     playerEntries.push([i, this.players[i]]);

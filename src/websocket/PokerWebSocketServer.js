@@ -210,51 +210,93 @@ class PokerWebSocketServer {
                 await this.handleLeaveTable(ws);
             }
 
-            // Get or create game engine for this table
-            let gameEngine = this.gameEngines.get(tableId);
-            if (!gameEngine) {
-                gameEngine = new PokerGameEngine(tableId, this);
-                this.gameEngines.set(tableId, gameEngine);
-                await gameEngine.loadFromRedis();
+            const tableManager = require('../../services/tableManager');
+        
+            // If tableId is not a real table ID, try to find or create a table for stake level 1
+            let targetTable = null;
+        
+            if (tableId === "test_table_1" || !tableId) {
+                // Find or create a table for stake level 1
+                targetTable = await tableManager.findOrCreateTable(1, client.userId);
+            } else {
+                // Try to get the specific table
+                const tables = await tableManager.getTableList();
+                targetTable = tables.find(t => t.tableId === tableId);
+            
+                if (!targetTable) {
+                    // Table doesn't exist, create one for stake level 1
+                    targetTable = await tableManager.findOrCreateTable(1, client.userId);
+                }
             }
 
-            // Attempt to join the table
-            const joinResult = await gameEngine.addPlayer(client.userId, client.username, seatIndex, buyinAmount);
-            
-            if (!joinResult.success) {
+            if (!targetTable) {
                 this.sendToClient(ws, {
                     type: MessageTypes.SERVER.ERROR,
-                    error: joinResult.error
+                    error: 'Could not find or create table'
+                });
+                return;
+            }
+
+            // Validate buyin amount
+            const stakeConfig = tableManager.stakelevels[targetTable.stakeLevel];
+            if (buyinAmount < stakeConfig.minBuyin || buyinAmount > stakeConfig.maxBuyin) {
+                this.sendToClient(ws, {
+                    type: MessageTypes.SERVER.ERROR,
+                    error: `Buyin must be between ${stakeConfig.minBuyin} and ${stakeConfig.maxBuyin}`
+                });
+                return;
+            }
+
+            // Assign seat to player
+            const seatResult = await tableManager.assignSeatToPlayer(
+                targetTable.tableId, 
+                client.userId, 
+                client.username, 
+                buyinAmount
+            );
+
+            if (!seatResult.success) {
+                this.sendToClient(ws, {
+                    type: MessageTypes.SERVER.ERROR,
+                    error: seatResult.error
                 });
                 return;
             }
 
             // Update client info
-            client.currentTable = tableId;
-            client.seatIndex = seatIndex;
+            client.currentTable = targetTable.tableId;
+            client.seatIndex = seatResult.seatIndex;
+
+            // Get or create game engine for this table
+            let gameEngine = this.gameEngines.get(targetTable.tableId);
+            if (!gameEngine) {
+                gameEngine = new PokerGameEngine(targetTable.tableId, this);
+                this.gameEngines.set(targetTable.tableId, gameEngine);
+                await gameEngine.loadFromRedis();
+            }
 
             // Send confirmation to joining client
             this.sendToClient(ws, {
                 type: MessageTypes.SERVER.TABLE_JOINED,
-                tableId: tableId,
-                seatIndex: seatIndex,
+                tableId: targetTable.tableId,
+                seatIndex: seatResult.seatIndex,
                 gameState: await gameEngine.getGameState()
             });
 
             // Notify all players in the table
-            await this.broadcastToTable(tableId, {
+            await this.broadcastToTable(targetTable.tableId, {
                 type: MessageTypes.SERVER.GAME_STATE,
                 data: {
                     event: 'player_joined',
-                    tableId: tableId,
+                    tableId: targetTable.tableId,
                     playerId: client.userId,
                     username: client.username,
-                    seatIndex: seatIndex,
+                    seatIndex: seatResult.seatIndex,
                     gameState: await gameEngine.getGameState()
                 }
             });
 
-            logger.info(`Client ${client.id} joined table ${tableId} at seat ${seatIndex}`);
+            logger.info(`Client ${client.id} joined table ${targetTable.tableId} at seat ${seatResult.seatIndex}`);
 
         } catch (error) {
             logger.error('Error joining table:', error);
@@ -340,6 +382,42 @@ class PokerWebSocketServer {
                 gameState: gameEngine ? await gameEngine.getGameState() : null
             }
         });
+    }
+
+    async handleTableListRequest(ws, stakeLevel) {
+        try {
+            const tableManager = require('../../services/tableManager');
+            const tables = await tableManager.getTableList(stakeLevel);
+            
+            // Transform the table data for client consumption
+            const clientTables = tables.map(table => ({
+                tableId: table.tableId,
+                stakeLevel: table.stakeLevel,
+                playerCount: table.playerCount,
+                maxPlayers: table.maxPlayers,
+                gamePhase: table.gamePhase,
+                smallBlind: table.smallBlind,
+                bigBlind: table.bigBlind,
+                minBuyin: table.minBuyin || table.bigBlind * 50,
+                maxBuyin: table.maxBuyin || table.bigBlind * 100,
+                availableSeats: table.availableSeats || []
+            }));
+
+            this.sendToClient(ws, {
+                type: MessageTypes.SERVER.TABLE_LIST,
+                tables: clientTables,
+                requestedStakeLevel: stakeLevel
+            });
+
+            logger.info(`Sent table list to client (stake level: ${stakeLevel}): ${clientTables.length} tables`);
+
+        } catch (error) {
+            logger.error('Error handling table list request:', error);
+            this.sendToClient(ws, {
+                type: MessageTypes.SERVER.ERROR,
+                error: 'Failed to retrieve table list'
+            });
+        }
     }
 
     async broadcastToTable(tableId, data) {
