@@ -91,8 +91,8 @@ class PokerGameEngine {
         this.stakeLevel = gameState.stakeLevel || 1;
         this.smallBlind = gameState.smallBlind || 50;
         this.bigBlind = gameState.bigBlind || 100;
-        this.minBuyin = gameState.minBuyin || 2000;
-        this.maxBuyin = gameState.maxBuyin || 10000;
+        this.minBuyin = gameState.minBuyin || 500;
+        this.maxBuyin = gameState.maxBuyin || 1000;
         
         // Load players (both humans and bots)
         this.players = new Array(5).fill(null);
@@ -109,12 +109,15 @@ class PokerGameEngine {
             console.log(`Loading ${gameState.bots.length} bots from Redis`);
             for (const [seatIndex, botData] of gameState.bots) {
                 if (botData && seatIndex >= 0 && seatIndex < 5) {
-                    console.log(`Loading bot ${botData.username} with ${botData.chips} chips at seat ${seatIndex}`);
+                    const chipAmount = botData.chips || this.maxBuyin;
+                    console.log(`Loading bot ${botData.username} with ${chipAmount} chips at seat ${seatIndex}`);
                     // Ensure consistent bot data structure
                     const normalizedBotData = {
                         user_id: botData.userId,
+                        user_id: botData.userId,
                         name: botData.username,
-                        chips: botData.chips || this.maxBuyin,
+                        username: botData.username,
+                        chips: chipAmount,
                         bet: 0,
                         folded: false,
                         sitting_out: false,

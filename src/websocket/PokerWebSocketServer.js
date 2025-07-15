@@ -212,12 +212,13 @@ class PokerWebSocketServer {
 
             const tableManager = require('../../services/tableManager');
         
-            // If tableId is not a real table ID, try to find or create a table for stake level 1
+            // Handle table finding logic - prioritize specific table ID
             let targetTable = null;
         
             if (tableId === "test_table_1" || !tableId) {
                 // Find or create a table for stake level 1
-                targetTable = await tableManager.findOrCreateTable(1, client.userId);
+                const stakeLevel = 1; // Get from message if available
+                targetTable = await tableManager.findOrCreateTable(stakeLevel, client.userId);
             } else {
                 // Try to get the specific table
                 const tables = await tableManager.getTableList();
@@ -238,7 +239,7 @@ class PokerWebSocketServer {
             }
 
             // Validate buyin amount
-            const stakeConfig = tableManager.stakelevels[targetTable.stakeLevel];
+            const stakeConfig = tableManager.stakelevels[targetTable.stakeLevel || 1];
             if (buyinAmount < stakeConfig.minBuyin || buyinAmount > stakeConfig.maxBuyin) {
                 this.sendToClient(ws, {
                     type: MessageTypes.SERVER.ERROR,
@@ -276,16 +277,34 @@ class PokerWebSocketServer {
             }
 
             // Send confirmation to joining client
+            const gameState = await gameEngine.getGameState();
             this.sendToClient(ws, {
                 type: MessageTypes.SERVER.TABLE_JOINED,
                 tableId: targetTable.tableId,
                 seatIndex: seatResult.seatIndex,
-                gameState: await gameEngine.getGameState()
+                gameState: gameState
+            });
+
+       
+            // Notify all players in the table about the new player
+            await this.broadcastToTable(targetTable.tableId, {
+                type: MessageTypes.SERVER.GAME_STATE,
+                data: {
+                    event: 'player_joined',
+                    tableId: targetTable.tableId,
+                    playerId: client.userId,
+                    username: client.username,
+                    seatIndex: seatResult.seatIndex,
+                    gameState: gameState
+                }
             });
 
             // Check if we should start a hand (2+ players and no active hand)
-            if (gameEngine.countActivePlayers() >= 2 && !gameEngine.activeHand) {
-                console.log(`Table ${targetTable.tableId} has ${gameEngine.countActivePlayers()} players, starting hand in 3 seconds`);
+            const playerCount = gameEngine.countActivePlayers();
+            console.log(`Table ${targetTable.tableId} has ${playerCount} players after join`);
+
+            if (playerCount >= 2 && !gameEngine.activeHand) {
+                console.log(`Starting hand in 3 seconds for table ${targetTable.tableId}`);
                 setTimeout(async () => {
                     if (gameEngine.countActivePlayers() >= 2 && !gameEngine.activeHand) {
                         gameEngine.startNewHand();
@@ -300,19 +319,6 @@ class PokerWebSocketServer {
                     }
                 }, 3000);
             }
-
-            // Notify all players in the table
-            await this.broadcastToTable(targetTable.tableId, {
-                type: MessageTypes.SERVER.GAME_STATE,
-                data: {
-                    event: 'player_joined',
-                    tableId: targetTable.tableId,
-                    playerId: client.userId,
-                    username: client.username,
-                    seatIndex: seatResult.seatIndex,
-                    gameState: await gameEngine.getGameState()
-                }
-            });
 
             logger.info(`Client ${client.id} joined table ${targetTable.tableId} at seat ${seatResult.seatIndex}`);
 

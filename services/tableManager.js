@@ -80,7 +80,7 @@ class TableManager {
             minBuyin: stakeConfig.minBuyin,
             maxBuyin: stakeConfig.maxBuyin,
             players: new Map(),
-            bots: await this.createBots(3), // Create 3 bots
+            bots: await this.createBots.call({ stakeLevel: parseInt(stakeLevel), stakelevels: this.stakelevels }, 3), // Pass context
             gamePhase: 'waiting',
             createdAt: Date.now(),
             lastActivity: Date.now()
@@ -110,7 +110,7 @@ class TableManager {
                 userId: botId,
                 username: botNames[i],
                 isBot: true,
-                chips: this.maxBuyin, // Standard bot buyin
+                chips: this.stakelevels[this.stakeLevel]?.maxBuyin || 1000,
                 cards: [],
                 currentBet: 0,
                 totalBet: 0,
