@@ -106,13 +106,15 @@ class PokerGameEngine {
         
         // Load bots
         if (gameState.bots && Array.isArray(gameState.bots)) {
+            console.log(`Loading ${gameState.bots.length} bots from Redis`);
             for (const [seatIndex, botData] of gameState.bots) {
                 if (botData && seatIndex >= 0 && seatIndex < 5) {
+                    console.log(`Loading bot ${botData.username} with ${botData.chips} chips at seat ${seatIndex}`);
                     // Ensure consistent bot data structure
                     const normalizedBotData = {
                         user_id: botData.userId,
                         name: botData.username,
-                        chips: botData.chips,
+                        chips: botData.chips || this.maxBuyin,
                         bet: 0,
                         folded: false,
                         sitting_out: false,
@@ -133,9 +135,9 @@ class PokerGameEngine {
         
         // Load game state
         this.activeHand = gameState.gamePhase !== 'waiting';
-        this.dealerPosition = gameState.dealerIndex || 0;
-        this.currentPot = gameState.pot || 0;
-        this.currentBet = gameState.currentBet || 0;
+        this.dealerPosition = gameState.dealerIndex || gameState.dealer_position || 0;
+        this.currentPot = gameState.pot || gameState.current_pot || 0;
+        this.currentBet = gameState.currentBet || gameState.current_bet || 0;
         this.communityCards = gameState.communityCards || [];
         this.currentRound = gameState.gamePhase || 'waiting';
         this.actionOn = gameState.currentPlayerIndex || -1;
@@ -793,18 +795,19 @@ class PokerGameEngine {
         return {
             tableId: this.tableId,
             stakeLevel: this.stakeLevel,
-            gamePhase: this.currentRound,
+            gamePhase: this.activeHand ? this.currentRound : 'waiting',
             active_hand: this.activeHand,
             players: this.players.map((player, index) => {
                 if (!player) return null;
                 return {
                     ...player,
-                    seatIndex: index
+                    seatIndex: index,
+                    chips: player.chips || 0 // Ensure chips is never null
                 };
             }),
             dealer_position: this.dealerPosition,
-            current_pot: this.currentPot,
-            current_bet: this.currentBet,
+            current_pot: this.currentPot || 0, // Ensure pot is never null
+            current_bet: this.currentBet || 0,
             community_cards: this.communityCards,
             action_on: this.actionOn,
             hand_number: this.handNumber,
