@@ -362,27 +362,6 @@ app.use((err, req, res, next) => {
     }
 });
 
-// Test endpoint to generate JWT for WebSocket testing
-app.get('/api/test-token', (req, res) => {
-    if (process.env.NODE_ENV === 'production') {
-        return res.status(404).json({ error: 'Not available in production' });
-    }
-    
-    const testUser = {
-        id: 1,
-        username: 'test_user',
-        email: 'test@example.com'
-    };
-    
-    const token = jwt.sign(testUser, process.env.JWT_SECRET || 'test-secret', { expiresIn: '1h' });
-    
-    res.json({ 
-        token,
-        websocket_url: `wss://api.luckydeckgaming.com/?token=${token}`,
-        curl_command: `curl -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" -H "Sec-WebSocket-Version: 13" "https://api.luckydeckgaming.com/?token=${token}"`
-    });
-});
-
 // 404 handler - must be last
 app.use((req, res) => {
     res.status(404).json({
