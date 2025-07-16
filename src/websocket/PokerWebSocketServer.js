@@ -276,16 +276,6 @@ class PokerWebSocketServer {
             client.currentTable = targetTable.tableId;
             client.seatIndex = seatResult.seatIndex;
 
-            // Ensure player is added to game engine with correct data structure
-            if (!gameEngine) {
-                gameEngine = new PokerGameEngine(targetTable.tableId, this);
-                this.gameEngines.set(targetTable.tableId, gameEngine);
-                await gameEngine.loadFromRedis();
-            }
-
-            // Add player to game engine with consistent field names
-            await gameEngine.addPlayer(client.userId, client.username, seatResult.seatIndex, buyinAmount);
-
             // Get or create game engine for this table
             let gameEngine = this.gameEngines.get(targetTable.tableId);
             if (!gameEngine) {
