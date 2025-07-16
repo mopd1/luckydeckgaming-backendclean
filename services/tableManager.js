@@ -80,7 +80,7 @@ class TableManager {
             minBuyin: stakeConfig.minBuyin,
             maxBuyin: stakeConfig.maxBuyin,
             players: new Map(),
-            bots: await this.createBots.call({ stakeLevel: parseInt(stakeLevel), stakelevels: this.stakelevels }, 3), // Pass context
+            bots: await this.createBots(3, parseInt(stakeLevel)), // Pass stakeLevel directly
             gamePhase: 'waiting',
             createdAt: Date.now(),
             lastActivity: Date.now()
@@ -100,9 +100,18 @@ class TableManager {
         };
     }
 
-    async createBots(count) {
+    async createBots(count, stakeLevel) {
         const bots = new Map();
         const botNames = ['Alex', 'Jordan', 'Casey', 'Morgan', 'Riley'];
+        const stakeConfig = this.stakelevels[stakeLevel];
+        
+        if (!stakeConfig) {
+            console.error(`Invalid stake level ${stakeLevel} for bot creation`);
+            // Fallback to stake level 1
+            stakeConfig = this.stakelevels[1];
+        }
+        
+        console.log(`Creating ${count} bots for stake level ${stakeLevel} with ${stakeConfig.maxBuyin} chips each`);
         
         for (let i = 0; i < count; i++) {
             const botId = `bot_${i}`;
@@ -110,7 +119,7 @@ class TableManager {
                 userId: botId,
                 username: botNames[i],
                 isBot: true,
-                chips: this.stakelevels[this.stakeLevel]?.maxBuyin || 1000,
+                chips: stakeConfig.maxBuyin, // Fixed: use correct stakeConfig
                 cards: [],
                 currentBet: 0,
                 totalBet: 0,
@@ -122,6 +131,7 @@ class TableManager {
             });
         }
         
+        console.log(`Created bots:`, Array.from(bots.values()).map(bot => `${bot.username}: ${bot.chips} chips`));
         return bots;
     }
 

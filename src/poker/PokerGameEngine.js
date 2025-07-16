@@ -111,13 +111,13 @@ class PokerGameEngine {
                 if (botData && seatIndex >= 0 && seatIndex < 5) {
                     const chipAmount = botData.chips || this.maxBuyin;
                     console.log(`Loading bot ${botData.username} with ${chipAmount} chips at seat ${seatIndex}`);
-                    // Ensure consistent bot data structure
+                    // Ensure consistent bot data structure - fixed duplicate field
                     const normalizedBotData = {
-                        user_id: botData.userId,
-                        user_id: botData.userId,
+                        userId: botData.userId,          // Primary field
+                        user_id: botData.userId,         // Compatibility field
                         name: botData.username,
                         username: botData.username,
-                        chips: chipAmount,
+                        chips: chipAmount,               // Ensure this is never null
                         bet: 0,
                         folded: false,
                         sitting_out: false,
@@ -794,6 +794,25 @@ class PokerGameEngine {
         return -1;
     }
 
+    getBettingLimits() {
+        if (this.actionOn === -1) return {};
+        
+        const player = this.players[this.actionOn];
+        if (!player) return {};
+        
+        const callAmount = this.currentBet - player.bet;
+        const minRaise = this.currentBet + this.bigBlind;
+        const maxBet = player.chips + player.bet;
+        
+        return {
+            min_bet: minRaise,
+            max_bet: maxBet,
+            default_bet: Math.min(minRaise, maxBet),
+            call_amount: callAmount,
+            can_check: callAmount === 0
+        };
+    }
+
     async getGameState() {
         return {
             tableId: this.tableId,
@@ -817,7 +836,8 @@ class PokerGameEngine {
             last_raise_amount_this_round: this.lastRaiseAmountThisRound,
             rake_eligible: this.rakeEligible,
             total_rake: this.totalRake,
-            hand_rake: this.handRake
+            hand_rake: this.handRake,
+            betting_limits: this.getBettingLimits() // Added betting limits for frontend
         };
     }
 }
