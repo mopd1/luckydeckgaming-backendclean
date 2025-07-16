@@ -204,8 +204,10 @@ class PokerGameEngine {
         
         // Create player data (matching frontend structure)
         const playerData = {
+            userId: userId,      // Frontend field name
             user_id: userId,
             name: username,
+            username: username,
             chips: buyinAmount,
             bet: 0,
             folded: false,
@@ -216,7 +218,9 @@ class PokerGameEngine {
             last_action_amount: 0,
             time_bank: 30.0,
             avatar_data: {},
-            is_bot: false
+            is_bot: false,
+            isBot: false,
+            seatIndex: seatIndex
         };
         
         this.players[seatIndex] = playerData;
@@ -625,6 +629,8 @@ class PokerGameEngine {
             const bbIndex = activePlayers[(dealerIndex + 2) % activePlayers.length];
             const firstActorIndex = (bbIndex + 1) % activePlayers.length;
             this.actionOn = activePlayers[firstActorIndex];
+
+            console.log(`Turn order debug: Dealer=${this.dealerPosition}, BB=${activePlayers[bbIndex]}, First to act=${this.actionOn}`);
         } else {
             // Post-flop, first to act is first active player after dealer
             const dealerIndex = activePlayers.indexOf(this.dealerPosition);
@@ -787,7 +793,7 @@ class PokerGameEngine {
 
     findPlayerSeat(userId) {
         for (let i = 0; i < this.players.length; i++) {
-            if (this.players[i] && this.players[i].user_id === userId) {
+            if (this.players[i] && (this.players[i].user_id === userId || this.players[i].userId === userId)) {
                 return i;
             }
         }

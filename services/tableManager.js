@@ -269,6 +269,8 @@ class TableManager {
                 const tableData = await redisClient.get(key);
                 if (tableData) {
                     const table = JSON.parse(tableData);
+                    const stakeConfig = this.stakelevels[table.stakeLevel] || this.stakelevels[1];
+                    
                     tables.push({
                         tableId: table.tableId,
                         stakeLevel: table.stakeLevel,
@@ -276,7 +278,10 @@ class TableManager {
                         maxPlayers: this.maxHumanPlayers,
                         gamePhase: table.gamePhase,
                         smallBlind: table.smallBlind,
-                        bigBlind: table.bigBlind
+                        bigBlind: table.bigBlind,
+                        minBuyin: stakeConfig.minBuyin,
+                        maxBuyin: stakeConfig.maxBuyin,
+                        availableSeats: this.getAvailableSeats(table)
                     });
                 }
             }

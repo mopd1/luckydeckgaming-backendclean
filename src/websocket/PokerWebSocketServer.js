@@ -212,13 +212,21 @@ class PokerWebSocketServer {
 
             const tableManager = require('../../services/tableManager');
         
-            // Handle table finding logic - prioritize specific table ID
+            // Handle table finding logic
             let targetTable = null;
+            let requestedStakeLevel = 1; // default
         
-            if (tableId === "test_table_1" || !tableId) {
-                // Find or create a table for stake level 1
-                const stakeLevel = 1; // Get from message if available
-                targetTable = await tableManager.findOrCreateTable(stakeLevel, client.userId);
+            // Check if this is a table creation request
+            if (tableId === "test_table_1" || tableId === "create_table" || tableId.startsWith("create_table_level_")) {
+                // Extract stake level from tableId if provided
+                if (tableId.startsWith("create_table_level_")) {
+                    const levelPart = tableId.replace("create_table_level_", "");
+                    requestedStakeLevel = parseInt(levelPart) || 1;
+                    console.log(`Creating table for stake level ${requestedStakeLevel}`);
+                }
+                
+                // Find or create a table for the requested stake level
+                targetTable = await tableManager.findOrCreateTable(requestedStakeLevel, client.userId);
             } else {
                 // Try to get the specific table
                 const tables = await tableManager.getTableList();
@@ -238,7 +246,7 @@ class PokerWebSocketServer {
                 return;
             }
 
-            // Validate buyin amount
+            // Validate buyin amount against the target table's stake level
             const stakeConfig = tableManager.stakelevels[targetTable.stakeLevel || 1];
             if (buyinAmount < stakeConfig.minBuyin || buyinAmount > stakeConfig.maxBuyin) {
                 this.sendToClient(ws, {
@@ -267,6 +275,16 @@ class PokerWebSocketServer {
             // Update client info
             client.currentTable = targetTable.tableId;
             client.seatIndex = seatResult.seatIndex;
+
+            // Ensure player is added to game engine with correct data structure
+            if (!gameEngine) {
+                gameEngine = new PokerGameEngine(targetTable.tableId, this);
+                this.gameEngines.set(targetTable.tableId, gameEngine);
+                await gameEngine.loadFromRedis();
+            }
+
+            // Add player to game engine with consistent field names
+            await gameEngine.addPlayer(client.userId, client.username, seatResult.seatIndex, buyinAmount);
 
             // Get or create game engine for this table
             let gameEngine = this.gameEngines.get(targetTable.tableId);
