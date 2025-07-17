@@ -132,7 +132,8 @@ class PokerGameEngine {
                         avatar_data: {},
                         is_bot: true,
                         isBot: true, // Keep both for compatibility
-                        seatIndex: seatIndex
+                        seatIndex: seatIndex,
+                        had_turn_this_round: false  // CRITICAL: Track if player has acted this betting round
                     };
                     this.players[seatIndex] = normalizedBotData;
                 }
@@ -223,7 +224,8 @@ class PokerGameEngine {
             avatar_data: {},
             is_bot: false,
             isBot: false,
-            seatIndex: seatIndex
+            seatIndex: seatIndex,
+            had_turn_this_round: false  // CRITICAL: Track if player has acted this betting round
         };
         
         this.players[seatIndex] = playerData;
@@ -318,6 +320,7 @@ class PokerGameEngine {
             case 'fold':
                 player.folded = true;
                 player.last_action = 'fold';
+                player.had_turn_this_round = true;  // CRITICAL: Mark that player has acted
                 console.log(`Player ${player.name} folds`);
                 
                 // CRITICAL: Clear action from folded player immediately to prevent stuck scenarios
@@ -333,6 +336,7 @@ class PokerGameEngine {
                     return { success: false, error: 'Cannot check, must call or fold' };
                 }
                 player.last_action = 'check';
+                player.had_turn_this_round = true;  // CRITICAL: Mark that player has acted
                 console.log(`Player ${player.name} checks`);
                 return { success: true, action: { type: 'check', player: player.name, seatIndex } };
                 
@@ -350,6 +354,7 @@ class PokerGameEngine {
                     player.bet += callAmount;
                     player.last_action = callAmount === 0 ? 'check' : 'call';
                 }
+                player.had_turn_this_round = true;  // CRITICAL: Mark that player has acted
                 console.log(`Player ${player.name} ${player.last_action} ${callAmount}`);
                 return { success: true, action: { type: player.last_action, amount: callAmount, player: player.name, seatIndex } };
                 
@@ -383,6 +388,7 @@ class PokerGameEngine {
                     }
                 }
                 
+                player.had_turn_this_round = true;  // CRITICAL: Mark that player has acted
                 console.log(`Player ${player.name} raises to ${amount} (raise of ${raiseAmount})`);
                 return { success: true, action: { type: 'raise', amount: amount, raiseAmount, player: player.name, seatIndex } };
                 
@@ -391,7 +397,7 @@ class PokerGameEngine {
         }
     }
 
-    // CRITICAL FIX: Completely rewritten moveToNextPlayer() method
+    // CRITICAL FIX: Completely rewritten moveToNextPlayer() method with had_turn_this_round tracking
     async moveToNextPlayer() {
         const activePlayers = this.getActivePlayers();
         
@@ -407,28 +413,6 @@ class PokerGameEngine {
             this.actionOn = -1;
         }
         
-        // HANDLE: If actionOn is -1 (no current action), we need to find the next player to act
-        if (this.actionOn === -1) {
-            console.log(`🔍 Finding next player to act (actionOn was -1)`);
-            
-            // Start from dealer and find first player who needs to act
-            for (let i = 0; i < 5; i++) {
-                const checkSeat = (this.dealerPosition + 1 + i) % 5;
-                if (this.players[checkSeat] && !this.players[checkSeat].folded && this.players[checkSeat].chips > 0) {
-                    // Check if this player needs to act based on current betting situation
-                    const player = this.players[checkSeat];
-                    const needsToAct = player.bet < this.currentBet || 
-                                     (this.lastAggressiveActor !== -1 && checkSeat === this.lastAggressiveActor && player.bet >= this.currentBet);
-                    
-                    if (needsToAct) {
-                        console.log(`   🎯 Found next player: seat ${checkSeat} (${player.name})`);
-                        this.actionOn = checkSeat;
-                        break;
-                    }
-                }
-            }
-        }
-        
         // Check if only one non-folded player left
         const nonFoldedPlayers = this.players.filter(p => p !== null && !p.folded);
         if (nonFoldedPlayers.length <= 1) {
@@ -437,194 +421,106 @@ class PokerGameEngine {
             return;
         }
         
-        // Also check active players (for other scenarios)
-        if (activePlayers.length <= 1) {
-            console.log('🏁 Only one active player left, ending hand');
-            await this.endHand();
-            return;
-        }
-        
-        // CRITICAL FIX: Determine if betting round is complete
-        // A betting round is complete when:
-        // 1. All non-folded players have acted at least once
-        // 2. All non-folded players have matched the current bet (or are all-in)
-        // 3. No player has raised since the last time everyone acted
+        // CRITICAL: Use had_turn_this_round tracking to determine round completion
+        console.log(`📊 Checking betting round completion with had_turn_this_round tracking...`);
         
         let bettingRoundComplete = true;
         let nextSeat = -1;
-        const seats = [];
+        let highestBet = this.currentBet;
+        let activePlayerCount = 0;
+        let activeNonAllInCount = 0;
         
-        // Build list of all seats with active players
+        // Log current player states for debugging
         for (let i = 0; i < 5; i++) {
-            if (this.players[i] && !this.players[i].folded) {
-                seats.push(i);
+            const player = this.players[i];
+            if (player && !player.folded) {
+                activePlayerCount++;
+                if (player.chips > 0) activeNonAllInCount++;
+                console.log(`   Seat ${i} (${player.name}): bet=${player.bet}, chips=${player.chips}, had_turn=${player.had_turn_this_round}`);
             }
         }
         
-        console.log(`🎰 Active seats: [${seats.join(', ')}]`);
+        console.log(`   ${activePlayerCount} active players, ${activeNonAllInCount} can still act`);
         
-        // If there was an aggressive action (bet/raise), we need to give everyone a chance to respond
-        if (this.lastAggressiveActor !== -1 && this.currentBet > 0) {
-            console.log(`💰 There was an aggressive action from seat ${this.lastAggressiveActor} (current bet: ${this.currentBet})`);
-            
-            // Find the next player after current who needs to act
-            let checked = 0;
-            let checkSeat = (this.actionOn + 1) % 5;
-            
-            while (checked < 5) {
-                if (this.players[checkSeat] && !this.players[checkSeat].folded) {
-                    const player = this.players[checkSeat];
-                    const needsToAct = player.chips > 0 && (player.bet < this.currentBet || checkSeat === this.lastAggressiveActor);
-                    
-                    console.log(`   Checking seat ${checkSeat} (${player.name}): bet=${player.bet}, chips=${player.chips}, needsToAct=${needsToAct}`);
-                    
-                    // If we've gone full circle back to the aggressor
-                    if (checkSeat === this.lastAggressiveActor) {
-                        if (player.bet >= this.currentBet || player.chips === 0) {
-                            console.log(`   ✅ Action returned to aggressor who doesn't need to act - round complete`);
-                            bettingRoundComplete = true;
-                            break;
-                        }
-                    }
-                    
-                    // Found someone who needs to act
-                    if (needsToAct && player.bet < this.currentBet) {
-                        nextSeat = checkSeat;
-                        bettingRoundComplete = false;
-                        console.log(`   🎯 Found next player to act: seat ${nextSeat} (${player.name})`);
-                        break;
-                    }
-                }
-                
-                checkSeat = (checkSeat + 1) % 5;
-                checked++;
-            }
-        } else {
-            // No aggressive action yet this round (everyone checking/calling)
-            console.log(`☮️ No aggressive action this round (current bet: ${this.currentBet})`);
-            
-            // EDGE CASE FIX 1: Handle preflop big blind option
-            if (this.currentRound === 'preflop' && this.currentBet === this.bigBlind) {
-                // Check if big blind still needs option to raise
-                const bigBlindSeat = (this.dealerPosition + 2) % 5;
-                const bigBlindPlayer = this.players[bigBlindSeat];
-                
-                if (bigBlindPlayer && !bigBlindPlayer.folded && bigBlindPlayer.chips > 0) {
-                    // Check if everyone else has called and big blind hasn't acted yet after calls
-                    let allCalledBigBlind = true;
-                    let bigBlindHadOption = false;
-                    
-                    for (let i = 0; i < 5; i++) {
-                        if (i === bigBlindSeat) continue; // Skip big blind
-                        const player = this.players[i];
-                        if (player && !player.folded) {
-                            if (player.bet < this.bigBlind) {
-                                allCalledBigBlind = false;
-                                break;
-                            }
-                        }
-                    }
-                    
-                    // Check if we've already given big blind the option
-                    // (This is a simplified check - in practice you'd track this more precisely)
-                    if (allCalledBigBlind && this.actionOn !== bigBlindSeat) {
-                        console.log(`🎯 Giving big blind option to raise at seat ${bigBlindSeat}`);
-                        nextSeat = bigBlindSeat;
-                        bettingRoundComplete = false;
-                    } else if (this.actionOn === bigBlindSeat && allCalledBigBlind) {
-                        console.log(`✅ Big blind has had option, preflop complete`);
-                        bettingRoundComplete = true;
-                    }
-                }
-            }
-            
-            // If not big blind option scenario, find next active player in order
-            if (nextSeat === -1) {
-                let checked = 0;
-                let checkSeat = (this.actionOn + 1) % 5;
-                
-                while (checked < 5) {
-                    if (this.players[checkSeat] && !this.players[checkSeat].folded && this.players[checkSeat].chips > 0) {
-                        nextSeat = checkSeat;
-                        bettingRoundComplete = false;
-                        console.log(`   🎯 Found next player: seat ${nextSeat} (${this.players[checkSeat].name})`);
-                        break;
-                    }
-                    
-                    checkSeat = (checkSeat + 1) % 5;
-                    checked++;
-                }
-                
-                // EDGE CASE FIX 2: Special handling for no-aggressor scenarios
-                if (nextSeat === -1) {
-                    // Check if everyone has acted and matched bets (all checks or calls)
-                    let everyoneMatched = true;
-                    let activePlayerCount = 0;
-                    
-                    for (let i = 0; i < 5; i++) {
-                        const player = this.players[i];
-                        if (player && !player.folded) {
-                            activePlayerCount++;
-                            if (player.chips > 0 && player.bet < this.currentBet) {
-                                everyoneMatched = false;
-                                break;
-                            }
-                        }
-                    }
-                    
-                    if (everyoneMatched && activePlayerCount > 1) {
-                        console.log(`   ✅ All players matched current bet (${this.currentBet}) - round complete`);
-                        bettingRoundComplete = true;
-                    } else if (activePlayerCount <= 1) {
-                        console.log(`   ✅ Only ${activePlayerCount} active player(s) left - round complete`);
-                        bettingRoundComplete = true;
-                    } else {
-                        console.log(`   ❌ No more players to act but bets don't match - emergency round completion`);
-                        bettingRoundComplete = true;
-                    }
+        // Check if round is complete using had_turn_this_round logic from backup
+        for (let i = 0; i < 5; i++) {
+            const player = this.players[i];
+            if (player && !player.folded) {
+                // Player needs to act if they have chips AND either:
+                // 1. They haven't matched the highest bet yet
+                // 2. They haven't had their turn this round (even if bet matches, like BB check option)
+                if (player.chips > 0 && (!player.had_turn_this_round || player.bet < highestBet)) {
+                    console.log(`   🔄 Seat ${i} (${player.name}) still needs to act: had_turn=${player.had_turn_this_round}, bet=${player.bet}, highestBet=${highestBet}`);
+                    bettingRoundComplete = false;
+                    break;
                 }
             }
         }
         
-        // CRITICAL: Handle if action is stuck on folded player
-        if (this.actionOn !== -1) {
-            const currentPlayer = this.players[this.actionOn];
-            if (currentPlayer && currentPlayer.folded) {
-                console.log(`🚨 CRITICAL: Action stuck on folded player at seat ${this.actionOn}!`);
-                
-                // EMERGENCY: Find next active player immediately
-                for (let i = 1; i < 5; i++) {
-                    const checkSeat = (this.actionOn + i) % 5;
-                    if (this.players[checkSeat] && !this.players[checkSeat].folded && this.players[checkSeat].chips > 0) {
-                        nextSeat = checkSeat;
-                        bettingRoundComplete = false;
-                        console.log(`   🔧 EMERGENCY: Moving action from folded seat ${this.actionOn} to active seat ${nextSeat}`);
-                        break;
-                    }
-                }
-                
-                // If we still can't find anyone, check if round should complete
-                if (nextSeat === -1) {
-                    console.log(`   🏁 EMERGENCY: No active players found, completing betting round`);
-                    bettingRoundComplete = true;
-                }
-            }
-        }
-        
+        // If round is complete, move to next phase
         if (bettingRoundComplete) {
-            console.log('🏁 Betting round complete, moving to next phase');
+            console.log('🏁 Betting round complete (all eligible players have acted and matched bets), moving to next phase');
             await this.moveToNextPhase();
             return;
         }
         
-        // We already found nextSeat above, now set it
+        // Find next player to act using the same logic as backup
+        console.log(`🔍 Finding next player to act...`);
+        
+        // Start searching from current actionOn position
+        let startSeat = this.actionOn === -1 ? this.dealerPosition : this.actionOn;
+        let searchAttempts = 0;
+        let checkSeat = (startSeat + 1) % 5;
+        
+        while (searchAttempts < 5) {
+            const player = this.players[checkSeat];
+            
+            if (player && !player.folded && player.chips > 0) {
+                // Player needs to act if they haven't matched the highest bet yet
+                // OR if they haven't had their turn this round (dual condition from backup)
+                const needsToAct = player.bet < highestBet || !player.had_turn_this_round;
+                
+                console.log(`   Checking seat ${checkSeat} (${player.name}): bet=${player.bet}, had_turn=${player.had_turn_this_round}, needsToAct=${needsToAct}`);
+                
+                if (needsToAct) {
+                    nextSeat = checkSeat;
+                    console.log(`   🎯 Found next player to act: seat ${nextSeat} (${player.name})`);
+                    break;
+                }
+            }
+            
+            checkSeat = (checkSeat + 1) % 5;
+            searchAttempts++;
+        }
+        
+        // Handle edge case: if no next player found but round not complete
         if (nextSeat === -1) {
-            console.log('🚨 CRITICAL ERROR: No next player found but betting round not complete!');
+            console.log('🚨 CRITICAL: No next player found but betting round not complete!');
             console.log(`   Current state: actionOn=${this.actionOn}, currentBet=${this.currentBet}, round=${this.currentRound}`);
             
-            // Emergency fallback: move to next phase
-            await this.moveToNextPhase();
-            return;
+            // Check for special scenarios
+            if (activeNonAllInCount <= 1) {
+                console.log(`   Only ${activeNonAllInCount} non-all-in players, completing round`);
+                await this.moveToNextPhase();
+                return;
+            }
+            
+            // Emergency: try to find ANY active player
+            for (let i = 0; i < 5; i++) {
+                const player = this.players[i];
+                if (player && !player.folded && player.chips > 0) {
+                    nextSeat = i;
+                    console.log(`   🔧 EMERGENCY: Found active player at seat ${i} (${player.name})`);
+                    break;
+                }
+            }
+            
+            // Final fallback: complete the round
+            if (nextSeat === -1) {
+                console.log(`   🏁 EMERGENCY: Force completing betting round`);
+                await this.moveToNextPhase();
+                return;
+            }
         }
         
         // Move action to next player
@@ -656,6 +552,7 @@ class PokerGameEngine {
         for (const player of this.players) {
             if (player) {
                 player.bet = 0;
+                player.had_turn_this_round = false;  // CRITICAL: Reset turn tracking for new betting round
             }
         }
         this.currentBet = 0;
@@ -858,9 +755,13 @@ class PokerGameEngine {
                 player.folded = false;
                 player.last_action = '';
                 player.last_action_amount = 0;
+                player.had_turn_this_round = false;  // CRITICAL: Reset turn tracking
                 console.log(`Reset player ${player.name} for new hand`);
             }
         }
+        
+        // Clear last aggressive actor for new hand
+        this.lastAggressiveActor = -1;
         
         // Set positions
         this.setPositions();
@@ -936,6 +837,8 @@ class PokerGameEngine {
             sbPlayer.bet = sbAmount;
             this.currentPot += sbAmount;
             sbPlayer.last_action = `small blind ${sbAmount}`;
+            // Note: Small blind does NOT count as having had turn - they need to act again
+            console.log(`Small blind posted: ${sbPlayer.name} posts ${sbAmount}`);
         }
         
         // Big blind
@@ -946,6 +849,8 @@ class PokerGameEngine {
             bbPlayer.bet = bbAmount;
             this.currentPot += bbAmount;
             bbPlayer.last_action = `big blind ${bbAmount}`;
+            // Note: Big blind does NOT count as having had turn - they get option to raise
+            console.log(`Big blind posted: ${bbPlayer.name} posts ${bbAmount}`);
         }
     }
 
