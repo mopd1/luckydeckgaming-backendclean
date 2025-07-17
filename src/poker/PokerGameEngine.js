@@ -389,6 +389,18 @@ class PokerGameEngine {
                 }
                 
                 player.had_turn_this_round = true;  // CRITICAL: Mark that player has acted
+                
+                // CRITICAL FIX: Reset had_turn_this_round for all other players when someone raises
+                // This is the key missing logic that was causing betting rounds to never complete
+                console.log(`🔧 CRITICAL FIX: Resetting had_turn_this_round for all players except ${player.name} due to raise`);
+                for (let i = 0; i < this.players.length; i++) {
+                    const otherPlayer = this.players[i];
+                    if (otherPlayer && !otherPlayer.folded && i !== seatIndex) {
+                        console.log(`   Resetting had_turn_this_round for ${otherPlayer.name} (seat ${i})`);
+                        otherPlayer.had_turn_this_round = false;
+                    }
+                }
+                
                 console.log(`Player ${player.name} raises to ${amount} (raise of ${raiseAmount})`);
                 return { success: true, action: { type: 'raise', amount: amount, raiseAmount, player: player.name, seatIndex } };
                 
@@ -442,18 +454,41 @@ class PokerGameEngine {
         
         console.log(`   ${activePlayerCount} active players, ${activeNonAllInCount} can still act`);
         
-        // Check if round is complete using had_turn_this_round logic from backup
+        // ENHANCED: Check if round is complete using comprehensive logic from backup
+        // This handles edge cases like BB check option, all-in scenarios, etc.
         for (let i = 0; i < 5; i++) {
             const player = this.players[i];
             if (player && !player.folded) {
                 // Player needs to act if they have chips AND either:
                 // 1. They haven't matched the highest bet yet
-                // 2. They haven't had their turn this round (even if bet matches, like BB check option)
+                // 2. They haven't had their turn this round (BB check option)
                 if (player.chips > 0 && (!player.had_turn_this_round || player.bet < highestBet)) {
                     console.log(`   🔄 Seat ${i} (${player.name}) still needs to act: had_turn=${player.had_turn_this_round}, bet=${player.bet}, highestBet=${highestBet}`);
                     bettingRoundComplete = false;
                     break;
                 }
+            }
+        }
+        
+        // ENHANCED: Handle all-in scenarios where only one player can act
+        // If only one non-all-in player remains, check if they've matched the highest bet
+        if (activeNonAllInCount <= 1 && activePlayerCount >= 2) {
+            let soleActorMatched = true;
+            if (activeNonAllInCount === 1) {
+                for (let i = 0; i < 5; i++) {
+                    const player = this.players[i];
+                    if (player && !player.folded && player.chips > 0) {
+                        if (player.bet < highestBet) {
+                            soleActorMatched = false;
+                            console.log(`   🔄 Sole active player seat ${i} (${player.name}) needs to match bet: ${player.bet} < ${highestBet}`);
+                            break;
+                        }
+                    }
+                }
+            }
+            if (soleActorMatched) {
+                console.log(`   🏁 All-in scenario: sole actor has matched bets, completing round`);
+                bettingRoundComplete = true;
             }
         }
         
