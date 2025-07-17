@@ -99,254 +99,285 @@ class PokerGameEngine {
         
         // Load players (both humans and bots)
         this.players = new Array(5).fill(null);
-        if (gameState.players && Array.isArray(gameState.players)) {
-            for (const [seatIndex, playerData] of gameState.players) {
-                if (playerData && seatIndex >= 0 && seatIndex < 5) {
-                    this.players[seatIndex] = playerData;
-                }
-            }
-        }
-        
-        // Load bots
-        if (gameState.bots && Array.isArray(gameState.bots)) {
-            console.log(`Loading ${gameState.bots.length} bots from Redis`);
-            for (const [seatIndex, botData] of gameState.bots) {
-                if (botData && seatIndex >= 0 && seatIndex < 5) {
-                    const chipAmount = botData.chips || this.maxBuyin;
-                    console.log(`Loading bot ${botData.username} with ${chipAmount} chips at seat ${seatIndex}`);
-                    // Ensure consistent bot data structure - fixed duplicate field
-                    const normalizedBotData = {
-                        userId: botData.userId,          // Primary field
-                        user_id: botData.userId,         // Compatibility field
-                        name: botData.username,
-                        username: botData.username,
-                        chips: chipAmount,               // Ensure this is never null
-                        bet: 0,
-                        folded: false,
-                        sitting_out: false,
-                        cards: [],
-                        auto_post_blinds: true,
-                        last_action: "",
-                        last_action_amount: 0,
-                        time_bank: 30.0,
-                        avatar_data: {},
-                        is_bot: true,
-                        isBot: true, // Keep both for compatibility
-                        seatIndex: seatIndex,
-                        had_turn_this_round: false  // CRITICAL: Track if player has acted this betting round
-                    };
-                    this.players[seatIndex] = normalizedBotData;
+        if (gameState.players) {
+            for (let i = 0; i < Math.min(gameState.players.length, 5); i++) {
+                if (gameState.players[i]) {
+                    this.players[i] = gameState.players[i];
                 }
             }
         }
         
         // Load game state
-        this.activeHand = gameState.gamePhase !== 'waiting';
-        this.dealerPosition = gameState.dealerIndex || gameState.dealer_position || 0;
-        this.currentPot = gameState.pot || gameState.current_pot || 0;
-        this.currentBet = gameState.currentBet || gameState.current_bet || 0;
+        this.activeHand = gameState.activeHand || false;
+        this.dealerPosition = gameState.dealerPosition || 0;
+        this.currentPot = gameState.currentPot || 0;
+        this.currentBet = gameState.currentBet || 0;
         this.communityCards = gameState.communityCards || [];
-        this.currentRound = gameState.gamePhase || 'waiting';
-        this.actionOn = gameState.currentPlayerIndex || -1;
+        this.currentRound = gameState.currentRound || 'preflop';
+        this.actionOn = gameState.actionOn || -1;
         this.handNumber = gameState.handNumber || 0;
         this.lastRaiseAmountThisRound = gameState.lastRaiseAmountThisRound || 0;
         
-        console.log(`Deserialized game state for table ${this.tableId}, phase: ${this.currentRound}`);
+        console.log(`Deserialized game state for table ${this.tableId}`);
     }
 
     serializeGameState() {
-        // Convert back to Redis format matching tableManager structure
-        const playerEntries = [];
-        const botEntries = [];
-        
-        for (let i = 0; i < this.players.length; i++) {
-            if (this.players[i]) {
-                if (this.players[i].isBot || this.players[i].is_bot) {
-                    botEntries.push([i, this.players[i]]);
-                } else {
-                    playerEntries.push([i, this.players[i]]);
-                }
-            }
-        }
-        
         return {
-            tableId: this.tableId,
             stakeLevel: this.stakeLevel,
             smallBlind: this.smallBlind,
             bigBlind: this.bigBlind,
             minBuyin: this.minBuyin,
             maxBuyin: this.maxBuyin,
-            players: playerEntries,
-            bots: botEntries,
-            gamePhase: this.activeHand ? this.currentRound : 'waiting',
-            dealerIndex: this.dealerPosition,
-            pot: this.currentPot,
+            players: this.players,
+            activeHand: this.activeHand,
+            dealerPosition: this.dealerPosition,
+            currentPot: this.currentPot,
             currentBet: this.currentBet,
             communityCards: this.communityCards,
-            currentPlayerIndex: this.actionOn,
+            currentRound: this.currentRound,
+            actionOn: this.actionOn,
             handNumber: this.handNumber,
-            lastRaiseAmountThisRound: this.lastRaiseAmountThisRound,
-            createdAt: Date.now(),
-            lastActivity: Date.now()
+            lastRaiseAmountThisRound: this.lastRaiseAmountThisRound
         };
     }
 
-    async addPlayer(userId, username, seatIndex, buyinAmount) {
-        // Validate seat availability
+    addPlayer(playerId, username, seatIndex, chips, isBot = false) {
         if (seatIndex < 0 || seatIndex >= 5) {
-            return { success: false, error: 'Invalid seat index' };
+            console.error(`Invalid seat index: ${seatIndex}`);
+            return false;
         }
-        
+
         if (this.players[seatIndex] !== null) {
-            return { success: false, error: 'Seat already occupied' };
+            console.error(`Seat ${seatIndex} is already occupied`);
+            return false;
         }
-        
-        // Validate buyin amount
-        if (buyinAmount < this.minBuyin || buyinAmount > this.maxBuyin) {
-            return { success: false, error: `Buyin must be between ${this.minBuyin} and ${this.maxBuyin}` };
-        }
-        
-        // Create player data (matching frontend structure)
-        const playerData = {
-            userId: userId,      // Frontend field name
-            user_id: userId,
-            name: username,
+
+        const player = {
+            userId: playerId,
             username: username,
-            chips: buyinAmount,
+            chips: chips,
             bet: 0,
             folded: false,
-            sitting_out: false,
+            allIn: false,
             cards: [],
-            auto_post_blinds: true,
-            last_action: "",
-            last_action_amount: 0,
-            time_bank: 30.0,
-            avatar_data: {},
-            is_bot: false,
-            isBot: false,
             seatIndex: seatIndex,
-            had_turn_this_round: false  // CRITICAL: Track if player has acted this betting round
+            isBot: isBot,
+            had_turn_this_round: false
         };
+
+        this.players[seatIndex] = player;
+        console.log(`Added ${isBot ? 'bot' : 'player'} ${username} to seat ${seatIndex} with ${chips} chips`);
         
-        this.players[seatIndex] = playerData;
-        
-        await this.saveToRedis();
-        
-        console.log(`Player ${username} joined table ${this.tableId} at seat ${seatIndex}`);
-        return { success: true, player: playerData };
+        return true;
     }
 
-    async removePlayer(userId) {
-        let removedSeat = -1;
-        
-        for (let i = 0; i < this.players.length; i++) {
-            if (this.players[i] && this.players[i].user_id === userId) {
-                this.players[i] = null;
-                removedSeat = i;
-                break;
-            }
+    removePlayer(seatIndex) {
+        if (seatIndex < 0 || seatIndex >= 5) {
+            return false;
         }
-        
-        if (removedSeat === -1) {
-            return { success: false, error: 'Player not found' };
-        }
-        
-        // Handle active hand scenarios
-        if (this.activeHand) {
-            // If it was the player's turn, advance to next player
-            if (this.actionOn === removedSeat) {
-                await this.moveToNextPlayer();
-            }
-            
-            // Check if we still have enough players to continue
-            if (this.countActivePlayers() < 2) {
-                await this.endHand();
-            }
-        }
-        
-        await this.saveToRedis();
-        
-        console.log(`Player removed from seat ${removedSeat} in table ${this.tableId}`);
-        return { success: true };
+
+        this.players[seatIndex] = null;
+        console.log(`Removed player from seat ${seatIndex}`);
+        return true;
     }
 
-    async processAction(userId, action, amount = 0) {
-        // Find player
-        const playerSeat = this.findPlayerSeat(userId);
-        if (playerSeat === -1) {
-            return { success: false, error: 'Player not found at table' };
+    getActivePlayers() {
+        return this.players.filter(player => player !== null && !player.folded);
+    }
+
+    async startNewHand() {
+        console.log('\n=== STARTING NEW HAND ===');
+        
+        // Reset game state
+        this.activeHand = true;
+        this.currentPot = 0;
+        this.currentBet = 0;
+        this.communityCards = [];
+        this.currentRound = 'preflop';
+        this.actionOn = -1;
+        this.lastRaiseAmountThisRound = 0;
+        this.lastAggressiveActor = -1;
+        this.rakeEligible = false;
+        this.handRake = 0;
+        
+        // Reset all players
+        for (const player of this.players) {
+            if (player) {
+                player.bet = 0;
+                player.folded = false;
+                player.allIn = false;
+                player.cards = [];
+                player.had_turn_this_round = false;
+            }
+        }
+
+        // Move dealer button
+        this.moveDealer();
+        this.handNumber++;
+
+        // Create new deck and deal cards
+        this.deck = new PokerDeck();
+        this.deck.shuffle();
+
+        // Deal two cards to each player
+        for (let i = 0; i < 2; i++) {
+            for (let seat = 0; seat < 5; seat++) {
+                const player = this.players[seat];
+                if (player && !player.folded) {
+                    const card = this.deck.deal();
+                    player.cards.push(card);
+                }
+            }
+        }
+
+        // Post blinds
+        await this.postBlinds();
+
+        // Set first action
+        this.setFirstAction();
+
+        console.log(`Hand ${this.handNumber} started. Dealer at seat ${this.dealerPosition}`);
+        console.log(`Action starts with seat ${this.actionOn}`);
+        
+        // Broadcast initial game state
+        this.broadcastGameState({ event: 'hand_started' });
+        
+        // Start action timer
+        this.startActionTimer();
+    }
+
+    moveDealer() {
+        const activePlayers = this.getActivePlayers();
+        if (activePlayers.length < 2) {
+            console.log('Not enough players to move dealer');
+            return;
+        }
+
+        let attempts = 0;
+        do {
+            this.dealerPosition = (this.dealerPosition + 1) % 5;
+            attempts++;
+        } while (this.players[this.dealerPosition] === null && attempts < 5);
+
+        console.log(`Dealer button moved to seat ${this.dealerPosition}`);
+    }
+
+    async postBlinds() {
+        const activePlayers = this.getActivePlayers();
+        if (activePlayers.length < 2) {
+            return;
+        }
+
+        // Find small blind position (next active player after dealer)
+        let sbPosition = this.findNextActivePlayer(this.dealerPosition);
+        let bbPosition = this.findNextActivePlayer(sbPosition);
+
+        // In heads-up, dealer posts small blind
+        if (activePlayers.length === 2) {
+            sbPosition = this.dealerPosition;
+            bbPosition = this.findNextActivePlayer(this.dealerPosition);
+        }
+
+        // Post small blind
+        const sbPlayer = this.players[sbPosition];
+        if (sbPlayer) {
+            const sbAmount = Math.min(this.smallBlind, sbPlayer.chips);
+            sbPlayer.chips -= sbAmount;
+            sbPlayer.bet = sbAmount;
+            sbPlayer.last_action = `small blind ${sbAmount}`;
+            this.currentPot += sbAmount;
+            console.log(`${sbPlayer.username} posts small blind ${sbAmount}`);
+        }
+
+        // Post big blind
+        const bbPlayer = this.players[bbPosition];
+        if (bbPlayer) {
+            const bbAmount = Math.min(this.bigBlind, bbPlayer.chips);
+            bbPlayer.chips -= bbAmount;
+            bbPlayer.bet = bbAmount;
+            bbPlayer.last_action = `big blind ${bbAmount}`;
+            this.currentPot += bbAmount;
+            this.currentBet = bbAmount;
+            console.log(`${bbPlayer.username} posts big blind ${bbAmount}`);
+        }
+    }
+
+    setFirstAction() {
+        const activePlayers = this.getActivePlayers();
+        if (activePlayers.length < 2) {
+            this.actionOn = -1;
+            return;
+        }
+
+        // Find first player to act (UTG - under the gun)
+        let position = this.dealerPosition;
+        
+        // In heads-up, big blind acts first preflop
+        if (activePlayers.length === 2) {
+            // Find big blind position
+            position = this.findNextActivePlayer(this.dealerPosition);
+            position = this.findNextActivePlayer(position);
+            this.actionOn = position;
+            return;
+        }
+
+        // Multi-way: action starts with player after big blind
+        position = this.findNextActivePlayer(position); // Small blind
+        position = this.findNextActivePlayer(position); // Big blind
+        position = this.findNextActivePlayer(position); // UTG
+        
+        this.actionOn = position;
+    }
+
+    findNextActivePlayer(startPosition) {
+        let position = (startPosition + 1) % 5;
+        let attempts = 0;
+        
+        while (attempts < 5) {
+            if (this.players[position] && !this.players[position].folded) {
+                return position;
+            }
+            position = (position + 1) % 5;
+            attempts++;
         }
         
-        // Validate it's player's turn
-        if (this.actionOn !== playerSeat) {
+        return -1; // No active player found
+    }
+
+    async executeAction(seatIndex, action, amount = 0) {
+        const player = this.players[seatIndex];
+        if (!player || player.folded) {
+            return { success: false, error: 'Invalid player or player folded' };
+        }
+
+        if (this.actionOn !== seatIndex) {
             return { success: false, error: 'Not your turn' };
         }
-        
-        if (!this.activeHand) {
-            return { success: false, error: 'No active hand' };
-        }
-        
-        const player = this.players[playerSeat];
-        if (!player || player.folded) {
-            return { success: false, error: 'Invalid player state' };
-        }
-        
-        // Clear action timeout
-        if (this.actionTimeout) {
-            clearTimeout(this.actionTimeout);
-            this.actionTimeout = null;
-        }
-        
-        // Process the action
-        console.log(`🎮 Processing action: ${action} by seat ${playerSeat} (${player.name}) for amount ${amount}`);
-        const actionResult = await this.executeAction(playerSeat, action, amount);
-        
-        if (actionResult.success) {
-            console.log(`✅ Action successful, moving to next player...`);
-            // Move to next player or next phase
-            await this.moveToNextPlayer();
-            await this.saveToRedis();
-        } else {
-            console.log(`❌ Action failed: ${actionResult.error}`);
-        }
-        
-        return actionResult;
-    }
 
-    async executeAction(seatIndex, action, amount) {
-        const player = this.players[seatIndex];
-        
+        console.log(`Player ${player.username} attempting ${action} ${amount}`);
+
         switch (action) {
             case 'fold':
                 player.folded = true;
                 player.last_action = 'fold';
                 player.had_turn_this_round = true;  // CRITICAL: Mark that player has acted
-                console.log(`Player ${player.name} folds`);
-                
-                // CRITICAL: Clear action from folded player immediately to prevent stuck scenarios
-                if (this.actionOn === seatIndex) {
-                    console.log(`🔧 Player ${player.name} folded and had action, clearing actionOn`);
-                    this.actionOn = -1; // Will be set properly in moveToNextPlayer()
-                }
-                
-                return { success: true, action: { type: 'fold', player: player.name, seatIndex } };
-                
-            case 'check':
-                if (this.currentBet > player.bet) {
-                    return { success: false, error: 'Cannot check, must call or fold' };
-                }
-                player.last_action = 'check';
-                player.had_turn_this_round = true;  // CRITICAL: Mark that player has acted
-                console.log(`Player ${player.name} checks`);
-                return { success: true, action: { type: 'check', player: player.name, seatIndex } };
-                
+                console.log(`Player ${player.username} folds`);
+                return { success: true, action: { type: 'fold', amount: 0, player: player.username, seatIndex } };
+
             case 'call':
-                const callAmount = this.currentBet - player.bet;
-                if (callAmount > player.chips) {
-                    // All-in call
-                    this.currentPot += player.chips;
-                    player.bet += player.chips;
-                    player.chips = 0;
+                const callAmount = Math.min(this.currentBet - player.bet, player.chips);
+                
+                if (callAmount === 0) {
+                    // Check
+                    player.last_action = 'check';
+                } else {
+                    this.currentPot += callAmount;
+                    player.chips -= callAmount;
+                    player.bet += callAmount;
+                    player.last_action = callAmount === 0 ? 'check' : 'call';
+                }
+                
+                if (player.chips === 0) {
                     player.last_action = 'all-in';
                 } else {
                     this.currentPot += callAmount;
@@ -355,8 +386,8 @@ class PokerGameEngine {
                     player.last_action = callAmount === 0 ? 'check' : 'call';
                 }
                 player.had_turn_this_round = true;  // CRITICAL: Mark that player has acted
-                console.log(`Player ${player.name} ${player.last_action} ${callAmount}`);
-                return { success: true, action: { type: player.last_action, amount: callAmount, player: player.name, seatIndex } };
+                console.log(`Player ${player.username} ${player.last_action} ${callAmount}`);
+                return { success: true, action: { type: player.last_action, amount: callAmount, player: player.username, seatIndex } };
                 
             case 'raise':
                 const raiseAmount = amount - this.currentBet;
@@ -392,17 +423,17 @@ class PokerGameEngine {
                 
                 // CRITICAL FIX: Reset had_turn_this_round for all other players when someone raises
                 // This is the key missing logic that was causing betting rounds to never complete
-                console.log(`🔧 CRITICAL FIX: Resetting had_turn_this_round for all players except ${player.name} due to raise`);
+                console.log(`🔧 CRITICAL FIX: Resetting had_turn_this_round for all players except ${player.username} due to raise`);
                 for (let i = 0; i < this.players.length; i++) {
                     const otherPlayer = this.players[i];
                     if (otherPlayer && !otherPlayer.folded && i !== seatIndex) {
-                        console.log(`   Resetting had_turn_this_round for ${otherPlayer.name} (seat ${i})`);
+                        console.log(`   Resetting had_turn_this_round for ${otherPlayer.username} (seat ${i})`);
                         otherPlayer.had_turn_this_round = false;
                     }
                 }
                 
-                console.log(`Player ${player.name} raises to ${amount} (raise of ${raiseAmount})`);
-                return { success: true, action: { type: 'raise', amount: amount, raiseAmount, player: player.name, seatIndex } };
+                console.log(`Player ${player.username} raises to ${amount} (raise of ${raiseAmount})`);
+                return { success: true, action: { type: 'raise', amount: amount, raiseAmount, player: player.username, seatIndex } };
                 
             default:
                 return { success: false, error: 'Invalid action' };
@@ -414,7 +445,7 @@ class PokerGameEngine {
         const activePlayers = this.getActivePlayers();
         
         console.log(`🎯 moveToNextPlayer: Current action on seat ${this.actionOn}, ${activePlayers.length} active players`);
-        console.log(`   Current bet: ${this.currentBet}, Last aggressive actor: ${this.lastAggressiveActor}`);
+        console.log(`   Current state: currentBet=${this.currentBet}, currentRound=${this.currentRound}, actionOn=${this.actionOn}`);
         
         // PRIORITY CHECK: If action is currently on a folded player, this is a critical error
         if (this.actionOn !== -1 && this.players[this.actionOn] && this.players[this.actionOn].folded) {
@@ -448,11 +479,21 @@ class PokerGameEngine {
             if (player && !player.folded) {
                 activePlayerCount++;
                 if (player.chips > 0) activeNonAllInCount++;
-                console.log(`   Seat ${i} (${player.name}): bet=${player.bet}, chips=${player.chips}, had_turn=${player.had_turn_this_round}`);
+                console.log(`   Seat ${i} (${player.username}): bet=${player.bet}, chips=${player.chips}, had_turn=${player.had_turn_this_round}`);
+            } else if (player === null) {
+                console.log(`   Seat ${i}: EMPTY SEAT`);
+            } else if (player && player.folded) {
+                console.log(`   Seat ${i} (${player.username}): FOLDED`);
             }
         }
         
         console.log(`   ${activePlayerCount} active players, ${activeNonAllInCount} can still act`);
+        
+        // CRITICAL DEBUG: Check for 4-player table issues
+        if (activePlayerCount === 4) {
+            console.log(`   🔍 4-PLAYER TABLE DETECTED - this might be causing the bug!`);
+            console.log(`   dealerPosition=${this.dealerPosition}, actionOn=${this.actionOn}`);
+        }
         
         // ENHANCED: Check if round is complete using comprehensive logic from backup
         // This handles edge cases like BB check option, all-in scenarios, etc.
@@ -460,10 +501,11 @@ class PokerGameEngine {
             const player = this.players[i];
             if (player && !player.folded) {
                 // Player needs to act if they have chips AND either:
-                // 1. They haven't matched the highest bet yet
-                // 2. They haven't had their turn this round (BB check option)
+                // 1. They haven't had their turn this round (BB check option or after a raise)
+                // 2. They haven't matched the highest bet yet
+                // CRITICAL FIX: Check had_turn_this_round FIRST - this is the primary condition
                 if (player.chips > 0 && (!player.had_turn_this_round || player.bet < highestBet)) {
-                    console.log(`   🔄 Seat ${i} (${player.name}) still needs to act: had_turn=${player.had_turn_this_round}, bet=${player.bet}, highestBet=${highestBet}`);
+                    console.log(`   🔄 Seat ${i} (${player.username}) still needs to act: had_turn=${player.had_turn_this_round}, bet=${player.bet}, highestBet=${highestBet}, chips=${player.chips}`);
                     bettingRoundComplete = false;
                     break;
                 }
@@ -472,7 +514,9 @@ class PokerGameEngine {
         
         // ENHANCED: Handle all-in scenarios where only one player can act
         // If only one non-all-in player remains, check if they've matched the highest bet
+        console.log(`   🔍 ALL-IN SCENARIO CHECK: activeNonAllInCount=${activeNonAllInCount}, activePlayerCount=${activePlayerCount}`);
         if (activeNonAllInCount <= 1 && activePlayerCount >= 2) {
+            console.log(`   ⚠️  TRIGGERING ALL-IN SCENARIO LOGIC - this might be the bug!`);
             let soleActorMatched = true;
             if (activeNonAllInCount === 1) {
                 for (let i = 0; i < 5; i++) {
@@ -480,7 +524,7 @@ class PokerGameEngine {
                     if (player && !player.folded && player.chips > 0) {
                         if (player.bet < highestBet) {
                             soleActorMatched = false;
-                            console.log(`   🔄 Sole active player seat ${i} (${player.name}) needs to match bet: ${player.bet} < ${highestBet}`);
+                            console.log(`   🔄 Sole active player seat ${i} (${player.username}) needs to match bet: ${player.bet} < ${highestBet}`);
                             break;
                         }
                     }
@@ -495,17 +539,35 @@ class PokerGameEngine {
         // If round is complete, move to next phase
         if (bettingRoundComplete) {
             console.log('🏁 Betting round complete (all eligible players have acted and matched bets), moving to next phase');
+            console.log(`   Final decision: bettingRoundComplete=${bettingRoundComplete}, activeNonAllInCount=${activeNonAllInCount}, activePlayerCount=${activePlayerCount}`);
             await this.moveToNextPhase();
             return;
+        } else {
+            console.log(`🔄 Betting round NOT complete, continuing with player actions`);
+            console.log(`   Decision factors: bettingRoundComplete=${bettingRoundComplete}, activeNonAllInCount=${activeNonAllInCount}, activePlayerCount=${activePlayerCount}`);
         }
         
         // Find next player to act using the same logic as backup
         console.log(`🔍 Finding next player to act...`);
+        console.log(`   Starting search from actionOn=${this.actionOn}, dealerPosition=${this.dealerPosition}`);
         
-        // Start searching from current actionOn position
+        // CRITICAL FIX: When finding next player after a raise, start from the seat after the raiser
+        // but make sure to check ALL seats to find any player who needs to act
         let startSeat = this.actionOn === -1 ? this.dealerPosition : this.actionOn;
         let searchAttempts = 0;
         let checkSeat = (startSeat + 1) % 5;
+        
+        console.log(`   Will start checking from seat ${checkSeat} (startSeat=${startSeat})`);
+        
+        // ENHANCED: Check ALL seats to make sure we don't miss anyone who needs to act
+        console.log(`   🔍 Checking all seats for players who need to act:`);
+        for (let i = 0; i < 5; i++) {
+            const player = this.players[i];
+            if (player && !player.folded && player.chips > 0) {
+                const needsToAct = player.bet < highestBet || !player.had_turn_this_round;
+                console.log(`     Seat ${i} (${player.username}): bet=${player.bet}, had_turn=${player.had_turn_this_round}, needsToAct=${needsToAct}`);
+            }
+        }
         
         while (searchAttempts < 5) {
             const player = this.players[checkSeat];
@@ -515,11 +577,11 @@ class PokerGameEngine {
                 // OR if they haven't had their turn this round (dual condition from backup)
                 const needsToAct = player.bet < highestBet || !player.had_turn_this_round;
                 
-                console.log(`   Checking seat ${checkSeat} (${player.name}): bet=${player.bet}, had_turn=${player.had_turn_this_round}, needsToAct=${needsToAct}`);
+                console.log(`   Checking seat ${checkSeat} (${player.username}): bet=${player.bet}, had_turn=${player.had_turn_this_round}, needsToAct=${needsToAct}`);
                 
                 if (needsToAct) {
                     nextSeat = checkSeat;
-                    console.log(`   🎯 Found next player to act: seat ${nextSeat} (${player.name})`);
+                    console.log(`   🎯 Found next player to act: seat ${nextSeat} (${player.username})`);
                     break;
                 }
             }
@@ -545,7 +607,7 @@ class PokerGameEngine {
                 const player = this.players[i];
                 if (player && !player.folded && player.chips > 0) {
                     nextSeat = i;
-                    console.log(`   🔧 EMERGENCY: Found active player at seat ${i} (${player.name})`);
+                    console.log(`   🔧 EMERGENCY: Found active player at seat ${i} (${player.username})`);
                     break;
                 }
             }
@@ -573,12 +635,12 @@ class PokerGameEngine {
         // If it's a bot's turn, handle bot decision
         const nextPlayer = this.players[nextSeat];
         if (nextPlayer && (nextPlayer.is_bot || nextPlayer.isBot)) {
-            console.log(`🤖 Next player is bot ${nextPlayer.name} at seat ${nextSeat}`);
+            console.log(`🤖 Next player is bot ${nextPlayer.username} at seat ${nextSeat}`);
             setTimeout(() => {
                 this.handleBotAction(nextSeat);
             }, 100);
         } else {
-            console.log(`👤 Next player is human ${nextPlayer ? nextPlayer.name : 'Unknown'} at seat ${nextSeat}`);
+            console.log(`👤 Next player is human ${nextPlayer ? nextPlayer.username : 'Unknown'} at seat ${nextSeat}`);
         }
     }
 
@@ -611,601 +673,346 @@ class PokerGameEngine {
                 this.dealCommunityCards(1);
                 break;
             case 'river':
-                await this.showdown();
+                await this.endHand();
                 return;
         }
         
-        // Set first player to act (first active player after dealer)
-        this.setFirstPlayerToAct();
+        // Set action to first active player after dealer
+        this.setPostFlopAction();
         
-        // Clear existing timeout
-        if (this.actionTimeout) {
-            clearTimeout(this.actionTimeout);
-            this.actionTimeout = null;
-        }
-        
-        this.startActionTimer();
-        
-        // If first player is bot, handle bot action
-        if (this.actionOn !== -1 && this.players[this.actionOn] && 
-            (this.players[this.actionOn].is_bot || this.players[this.actionOn].isBot)) {
-            setTimeout(() => {
-                this.handleBotAction(this.actionOn);
-            }, 100);
-        }
-    }
-
-    startActionTimer() {
-        if (this.actionTimeout) {
-            clearTimeout(this.actionTimeout);
-        }
-        
-        this.actionTimeout = setTimeout(async () => {
-            // Auto-fold the player if they timeout
-            const currentPlayer = this.players[this.actionOn];
-            if (currentPlayer && !currentPlayer.folded) {
-                console.log(`Player ${currentPlayer.name} timed out, auto-folding`);
-                
-                // Auto-fold both humans and bots on timeout
-                await this.executeAction(this.actionOn, 'fold', 0);
-                await this.moveToNextPlayer();
-                await this.saveToRedis();
-            }
-        }, this.actionTimeLimit);
-    }
-
-    async handleBotAction(seatIndex) {
-        const bot = this.players[seatIndex];
-        if (!bot || (!bot.is_bot && !bot.isBot)) {
-            console.log(`No bot found at seat ${seatIndex} or not a bot`);
-            return;
-        }
-        
-        // Validate bot is still supposed to act
-        if (this.actionOn !== seatIndex || bot.folded || bot.chips <= 0) {
-            console.log(`Bot ${bot.name} no longer needs to act - actionOn: ${this.actionOn}, folded: ${bot.folded}, chips: ${bot.chips}`);
-            return;
-        }
-        
-        console.log(`Bot ${bot.name} making decision for ${this.currentRound} round`);
-        
-        // Create bot instance for decision making
-        const botPlayer = new BotPlayer(seatIndex, this.tableId, bot.chips);
-        
-        // Get current game state for bot decision
-        const gameState = await this.getGameState();
-        
-        // Add debugging info
-        console.log(`Bot decision input: actionOn=${gameState.action_on}, currentRound=${gameState.gamePhase}, currentBet=${gameState.current_bet}`);
-        
-        let decision;
-        try {
-            decision = botPlayer.makeDecision(gameState);
-            console.log(`Bot ${bot.name} decision: ${decision.action}, amount: ${decision.amount || 0}`);
-        } catch (error) {
-            console.error(`Bot ${bot.name} decision error:`, error);
-            decision = { action: 'fold', amount: 0 };
-        }
-        
-        // Validate decision
-        if (!['fold', 'check', 'call', 'raise'].includes(decision.action)) {
-            console.error(`Invalid bot action: ${decision.action}, folding instead`);
-            decision = { action: 'fold', amount: 0 };
-        }
-        
-        // Calculate think time (shortened for testing)
-        const thinkTime = Math.min(botPlayer.getThinkTime(decision.action, decision.amount || 0), 2.0);
-        
-        console.log(`Bot ${bot.name} will ${decision.action} in ${thinkTime.toFixed(1)}s`);
-        
-        // Store the bot action for timeout validation
-        const actionId = `${seatIndex}_${Date.now()}`;
-        this.pendingBotActions.set(actionId, {
-            seatIndex,
-            action: decision.action,
-            amount: decision.amount || 0,
-            gamePhase: this.currentRound,
-            actionOn: this.actionOn
-        });
-        
-        // Schedule bot action
-        setTimeout(async () => {
-            const pendingAction = this.pendingBotActions.get(actionId);
-            if (!pendingAction) {
-                console.log(`Bot action ${actionId} was cancelled`);
-                return;
-            }
-            
-            // Validate game state hasn't changed
-            if (this.actionOn !== seatIndex || 
-                this.currentRound !== pendingAction.gamePhase || 
-                bot.folded) {
-                console.log(`Game state changed, cancelling bot action for ${bot.name}`);
-                this.pendingBotActions.delete(actionId);
-                return;
-            }
-            
-            try {
-                console.log(`Executing bot action: ${bot.name} ${pendingAction.action} ${pendingAction.amount}`);
-                await this.executeAction(seatIndex, pendingAction.action, pendingAction.amount);
-                
-                // Broadcast the action result to all players
-                if (this.websocketServer) {
-                    const gameState = await this.getGameState();
-                    await this.websocketServer.broadcastToTable(this.tableId, {
-                        type: 'game_state',
-                        data: {
-                            event: 'player_action',
-                            action: {
-                                type: pendingAction.action,
-                                amount: pendingAction.amount,
-                                seatIndex: seatIndex
-                            },
-                            gameState: gameState
-                        }
-                    });
-                }
-                
-                await this.moveToNextPlayer();
-                await this.saveToRedis();
-            } catch (error) {
-                console.error(`Error executing bot action:`, error);
-                // Force fold on error
-                await this.executeAction(seatIndex, 'fold', 0);
-                await this.moveToNextPlayer();
-                await this.saveToRedis();
-            }
-            
-            this.pendingBotActions.delete(actionId);
-        }, thinkTime * 1000);
-    }
-
-    startNewHand() {
-        if (this.countActivePlayers() < 2) {
-            this.activeHand = false;
-            this.currentRound = 'waiting';
-            return;
-        }
-        
-        console.log(`Starting new hand ${this.handNumber + 1} at table ${this.tableId}`);
-        
-        this.handNumber++;
-        this.activeHand = true;
-        this.currentRound = 'preflop';
-        this.deck = new PokerDeck();
-        this.deck.shuffle();
-        this.communityCards = [];
-        this.currentPot = 0;
-        this.currentBet = this.bigBlind;
-        this.rakeEligible = false;
-        this.handRake = 0;
-        this.playersShowingCards = [];
-        this.lastRaiseAmountThisRound = 0;
-        
-        // Reset all players for new hand - CRITICAL FIX
-        for (const player of this.players) {
-            if (player) {
-                player.cards = []; // Clear old cards
-                player.bet = 0;
-                player.folded = false;
-                player.last_action = '';
-                player.last_action_amount = 0;
-                player.had_turn_this_round = false;  // CRITICAL: Reset turn tracking
-                console.log(`Reset player ${player.name} for new hand`);
-            }
-        }
-        
-        // Clear last aggressive actor for new hand
-        this.lastAggressiveActor = -1;
-        
-        // Set positions
-        this.setPositions();
-        
-        // Post blinds
-        this.postBlinds();
-        
-        // Deal hole cards - CRITICAL FIX
-        this.dealHoleCards();
-        
-        // Log cards to verify they were dealt
-        for (let i = 0; i < this.players.length; i++) {
-            const player = this.players[i];
-            if (player && player.cards.length > 0) {
-                console.log(`Player ${player.name} at seat ${i} dealt: ${player.cards.map(c => c.rank + c.suit).join(', ')}`);
-            }
-        }
-        
-        // Set first player to act
-        this.setFirstPlayerToAct();
-        
-        // Clear existing timeout
-        if (this.actionTimeout) {
-            clearTimeout(this.actionTimeout);
-            this.actionTimeout = null;
-        }
+        // Broadcast state update
+        this.broadcastGameState({ event: 'betting_round_complete' });
         
         // Start action timer
         this.startActionTimer();
-        
-        // Broadcast hand started event with new cards
-        if (this.websocketServer) {
-            const gameState = this.getGameState();
-            this.websocketServer.broadcastToTable(this.tableId, {
-                type: 'game_state',
-                data: {
-                    event: 'hand_started',
-                    gameState: gameState
-                }
-            });
-        }
-        
-        // If first player is bot, handle bot action
-        if (this.actionOn !== -1 && this.players[this.actionOn] && 
-            (this.players[this.actionOn].is_bot || this.players[this.actionOn].isBot)) {
-            setTimeout(() => {
-                this.handleBotAction(this.actionOn);
-            }, 100);
-        }
     }
 
-    setPositions() {
-        const activePlayers = this.getActivePlayerSeats();
-        if (activePlayers.length >= 2) {
-            // Rotate dealer position
-            this.dealerPosition = activePlayers[this.handNumber % activePlayers.length];
-        }
-    }
-
-    postBlinds() {
-        const activePlayers = this.getActivePlayerSeats();
-        if (activePlayers.length < 2) return;
-        
-        const dealerIndex = activePlayers.indexOf(this.dealerPosition);
-        const sbIndex = activePlayers[(dealerIndex + 1) % activePlayers.length];
-        const bbIndex = activePlayers[(dealerIndex + 2) % activePlayers.length];
-        
-        // Small blind
-        const sbPlayer = this.players[sbIndex];
-        if (sbPlayer) {
-            const sbAmount = Math.min(this.smallBlind, sbPlayer.chips);
-            sbPlayer.chips -= sbAmount;
-            sbPlayer.bet = sbAmount;
-            this.currentPot += sbAmount;
-            sbPlayer.last_action = `small blind ${sbAmount}`;
-            // Note: Small blind does NOT count as having had turn - they need to act again
-            console.log(`Small blind posted: ${sbPlayer.name} posts ${sbAmount}`);
+    setPostFlopAction() {
+        const activePlayers = this.getActivePlayers();
+        if (activePlayers.length < 2) {
+            this.actionOn = -1;
+            return;
         }
         
-        // Big blind
-        const bbPlayer = this.players[bbIndex];
-        if (bbPlayer) {
-            const bbAmount = Math.min(this.bigBlind, bbPlayer.chips);
-            bbPlayer.chips -= bbAmount;
-            bbPlayer.bet = bbAmount;
-            this.currentPot += bbAmount;
-            bbPlayer.last_action = `big blind ${bbAmount}`;
-            // Note: Big blind does NOT count as having had turn - they get option to raise
-            console.log(`Big blind posted: ${bbPlayer.name} posts ${bbAmount}`);
-        }
-    }
-
-    dealHoleCards() {
-        const activePlayers = this.getActivePlayerSeats();
+        // Action starts with first active player after dealer
+        let position = this.dealerPosition;
+        let attempts = 0;
         
-        console.log(`Dealing hole cards to ${activePlayers.length} players`);
-        
-        // Deal 2 cards to each active player
-        for (let cardNum = 0; cardNum < 2; cardNum++) {
-            for (const seatIndex of activePlayers) {
-                const player = this.players[seatIndex];
-                if (player) {
-                    const card = this.deck.deal();
-                    player.cards.push(card);
-                    console.log(`Dealt ${card.rank}${card.suit} to ${player.name} at seat ${seatIndex}`);
-                }
+        while (attempts < 5) {
+            position = (position + 1) % 5;
+            if (this.players[position] && !this.players[position].folded) {
+                this.actionOn = position;
+                console.log(`Post-flop action starts with seat ${position}`);
+                return;
             }
+            attempts++;
         }
+        
+        this.actionOn = -1;
     }
 
     dealCommunityCards(count) {
         for (let i = 0; i < count; i++) {
-            this.communityCards.push(this.deck.deal());
+            if (this.deck) {
+                const card = this.deck.deal();
+                this.communityCards.push(card);
+                console.log(`Dealt community card: ${card.rank} of ${card.suit}`);
+            }
         }
-        console.log(`Dealt ${count} community cards, total: ${this.communityCards.length}`);
+        
+        console.log(`Community cards: ${this.communityCards.map(c => `${c.rank}${c.suit}`).join(' ')}`);
     }
 
-    setFirstPlayerToAct() {
-        const activePlayers = this.getActivePlayerSeats();
-        
-        console.log(`🎯 setFirstPlayerToAct: ${this.currentRound} round, ${activePlayers.length} active players: [${activePlayers.join(', ')}]`);
-        
-        if (activePlayers.length === 0) {
-            console.log('❌ No active players found, setting actionOn = -1');
-            this.actionOn = -1;
+    startActionTimer() {
+        // Clear any existing timeout
+        if (this.actionTimeout) {
+            clearTimeout(this.actionTimeout);
+            this.actionTimeout = null;
+        }
+
+        // Only start timer if there's an active player
+        if (this.actionOn !== -1 && this.players[this.actionOn]) {
+            console.log(`⏰ Starting 20-second action timer for seat ${this.actionOn}`);
+            
+            this.actionTimeout = setTimeout(async () => {
+                console.log(`⏰ Action timeout for seat ${this.actionOn}`);
+                
+                const player = this.players[this.actionOn];
+                if (player && !player.folded) {
+                    // Auto-fold the player
+                    const result = await this.executeAction(this.actionOn, 'fold');
+                    if (result.success) {
+                        console.log(`Player ${player.username} auto-folded due to timeout`);
+                        
+                        // Broadcast the action
+                        this.broadcastGameState({
+                            event: 'player_action',
+                            action: result.action
+                        });
+                        
+                        // Move to next player
+                        await this.moveToNextPlayer();
+                    }
+                }
+            }, this.actionTimeLimit);
+        }
+    }
+
+    async handleBotAction(seatIndex) {
+        const player = this.players[seatIndex];
+        if (!player || !player.isBot || player.folded || this.actionOn !== seatIndex) {
             return;
         }
-        
-        if (this.currentRound === 'preflop') {
-            // Fix: First to act is player after big blind (UTG)
-            const dealerIndex = activePlayers.indexOf(this.dealerPosition);
-            
-            if (activePlayers.length === 2) {
-                // Heads up: dealer acts first preflop
-                this.actionOn = this.dealerPosition;
-                console.log(`🎯 Heads up preflop: Dealer (seat ${this.dealerPosition}) acts first`);
-            } else {
-                // 3+ players: action starts after big blind
-                const bbIndex = (dealerIndex + 2) % activePlayers.length;
-                const firstActorIndex = (bbIndex + 1) % activePlayers.length;
-                this.actionOn = activePlayers[firstActorIndex];
-                console.log(`🎯 Multi-player preflop: UTG (seat ${this.actionOn}) acts first`);
-            }
 
-            console.log(`Turn order: Dealer=${this.dealerPosition}, First to act=${this.actionOn}`);
-        } else {
-            // Post-flop, first to act is first active player after dealer
-            const dealerIndex = activePlayers.indexOf(this.dealerPosition);
-            console.log(`🎯 Post-flop: Looking for first player after dealer (seat ${this.dealerPosition})`);
+        // Prevent duplicate bot actions
+        if (this.pendingBotActions.has(seatIndex)) {
+            console.log(`Bot action already pending for seat ${seatIndex}`);
+            return;
+        }
+
+        this.pendingBotActions.set(seatIndex, true);
+        
+        try {
+            console.log(`🤖 Bot ${player.username} is thinking...`);
             
-            // Track attempts to prevent infinite loops
-            let attempts = 0;
-            let nextIndex = (dealerIndex + 1) % activePlayers.length;
+            // Simulate thinking time
+            const thinkTime = 1000 + Math.random() * 2000; // 1-3 seconds
+            await new Promise(resolve => setTimeout(resolve, thinkTime));
             
-            // Find first non-folded, non-all-in player
-            while (attempts < activePlayers.length) {
-                const seatIndex = activePlayers[nextIndex];
-                const player = this.players[seatIndex];
-                
-                console.log(`🔍 Checking seat ${seatIndex}: player=${player ? player.name : 'null'}, folded=${player ? player.folded : 'n/a'}, chips=${player ? player.chips : 'n/a'}`);
-                
-                if (player && !player.folded && player.chips > 0) {
-                    this.actionOn = seatIndex;
-                    console.log(`✅ Found first player to act: seat ${seatIndex} (${player.name})`);
-                    return;
-                }
-                
-                nextIndex = (nextIndex + 1) % activePlayers.length;
-                attempts++;
-            }
-            
-            // CRITICAL FIX: Enhanced fallback logic
-            console.log('⚠️ No valid post-flop player found, checking for any non-folded players...');
-            
-            // Look for ANY non-folded player (even if all-in)
-            for (const seatIndex of activePlayers) {
-                const player = this.players[seatIndex];
-                if (player && !player.folded) {
-                    this.actionOn = seatIndex;
-                    console.log(`🔧 Fallback: Found non-folded player at seat ${seatIndex} (${player.name})`);
-                    return;
-                }
-            }
-            
-            // Final fallback: Check if we should end the hand
-            const nonFoldedPlayers = activePlayers.filter(seatIndex => {
-                const player = this.players[seatIndex];
-                return player && !player.folded;
-            });
-            
-            if (nonFoldedPlayers.length <= 1) {
-                console.log('🏁 Only one or no non-folded players remaining, ending hand');
-                this.actionOn = -1;
-                // Schedule hand end
-                setTimeout(() => {
-                    this.endHand();
-                }, 100);
+            // Check if still our turn (might have timed out)
+            if (this.actionOn !== seatIndex || player.folded) {
+                console.log(`🤖 Bot ${player.username} lost turn while thinking`);
                 return;
             }
             
-            // If we reach here, something is wrong - force end hand
-            console.log('🚨 CRITICAL: setFirstPlayerToAct failed to find valid player, forcing hand end');
-            this.actionOn = -1;
-            setTimeout(() => {
-                this.endHand();
-            }, 100);
-        }
-    }
-
-    async showdown() {
-        this.currentRound = 'showdown';
-        this.actionOn = -1;
-        
-        const activePlayers = this.getActivePlayers();
-        const winners = this.determineWinners(activePlayers);
-        
-        // Calculate rake (10% matching frontend)
-        let rake = 0;
-        if (this.rakeEligible && this.currentPot > 0) {
-            rake = Math.floor(this.currentPot * 0.1);
-            this.handRake = rake;
-            this.totalRake += rake;
-        }
-        
-        // Distribute pot after rake
-        const potAfterRake = this.currentPot - rake;
-        const winAmount = Math.floor(potAfterRake / winners.length);
-        
-        for (const winner of winners) {
-            winner.chips += winAmount;
-        }
-        
-        // Broadcast showdown results
-        const winnerInfo = {
-            winner_index: this.findPlayerSeat(winners[0].user_id),
-            hand_description: this.getHandDescription(winners[0]),
-            pot_amount: potAfterRake,
-            rake: rake
-        };
-        
-        console.log(`Hand ${this.handNumber} complete. Winner: ${winners[0].name}, pot: ${potAfterRake}`);
-        
-        // Schedule next hand
-        setTimeout(() => {
-            this.startNewHand();
-        }, 5000);
-        
-        return winnerInfo;
-    }
-
-    determineWinners(players) {
-        if (players.length === 1) {
-            return players;
-        }
-        
-        let bestHandValue = -1;
-        let winners = [];
-        
-        for (const player of players) {
-            const handInfo = HandEvaluator.evaluateHand(player.cards, this.communityCards);
-            const handValue = this.getHandValue(handInfo);
+            // Simple bot logic
+            const callAmount = this.currentBet - player.bet;
+            const canCheck = callAmount === 0;
+            const potOdds = callAmount > 0 ? callAmount / (this.currentPot + callAmount) : 0;
             
-            if (handValue > bestHandValue) {
-                bestHandValue = handValue;
-                winners = [player];
-            } else if (handValue === bestHandValue) {
-                winners.push(player);
+            let action = 'fold';
+            let amount = 0;
+            
+            // Basic decision logic
+            if (canCheck) {
+                action = 'call'; // Check
+            } else if (potOdds < 0.3 && Math.random() < 0.7) {
+                action = 'call';
+            } else if (Math.random() < 0.1 && player.chips > callAmount * 2) {
+                // Occasionally raise
+                action = 'raise';
+                amount = this.currentBet + this.bigBlind;
+            } else {
+                action = 'fold';
             }
+            
+            // Execute the action
+            const result = await this.executeAction(seatIndex, action, amount);
+            if (result.success) {
+                console.log(`🤖 Bot ${player.username} executed ${result.action.type}`);
+                
+                // Broadcast the action
+                this.broadcastGameState({
+                    event: 'player_action',
+                    action: result.action
+                });
+                
+                // Move to next player
+                await this.moveToNextPlayer();
+            }
+            
+        } catch (error) {
+            console.error(`Error in bot action for ${player.username}:`, error);
+        } finally {
+            this.pendingBotActions.delete(seatIndex);
         }
-        
-        return winners;
-    }
-
-    getHandValue(handInfo) {
-        // Convert hand rank and values to comparable number
-        return handInfo.rank * 100000 + (handInfo.values[0] || 0) * 1000 + (handInfo.values[1] || 0);
-    }
-
-    getHandDescription(player) {
-        const handInfo = HandEvaluator.evaluateHand(player.cards, this.communityCards);
-        return HandEvaluator.handRankToString(handInfo);
     }
 
     async endHand() {
+        console.log('\n=== ENDING HAND ===');
+        
+        const activePlayers = this.getActivePlayers();
+        
+        if (activePlayers.length === 0) {
+            console.log('No active players, ending hand');
+            this.activeHand = false;
+            return;
+        }
+        
+        if (activePlayers.length === 1) {
+            // Single winner
+            const winner = activePlayers[0];
+            const winAmount = this.currentPot;
+            winner.chips += winAmount;
+            
+            console.log(`${winner.username} wins ${winAmount} chips (no showdown)`);
+            
+            this.broadcastGameState({
+                event: 'hand_ended',
+                winners: [{
+                    seatIndex: winner.seatIndex,
+                    username: winner.username,
+                    winAmount: winAmount,
+                    handRank: null
+                }]
+            });
+        } else {
+            // Showdown
+            await this.handleShowdown();
+        }
+        
+        // Reset for next hand
         this.activeHand = false;
-        this.currentRound = 'waiting';
         this.actionOn = -1;
         
+        // Clear any pending timeouts
         if (this.actionTimeout) {
             clearTimeout(this.actionTimeout);
             this.actionTimeout = null;
         }
         
-        // Award pot to remaining player
+        // Schedule next hand
+        setTimeout(async () => {
+            if (this.getActivePlayers().length >= 2) {
+                await this.startNewHand();
+            }
+        }, 5000);
+    }
+
+    async handleShowdown() {
         const activePlayers = this.getActivePlayers();
-        if (activePlayers.length === 1) {
-            activePlayers[0].chips += this.currentPot;
+        console.log(`Showdown with ${activePlayers.length} players`);
+        
+        // Evaluate hands
+        const handEvaluator = new HandEvaluator();
+        const results = [];
+        
+        for (const player of activePlayers) {
+            const playerCards = [...player.cards, ...this.communityCards];
+            const evaluation = handEvaluator.evaluateHand(playerCards);
+            results.push({
+                player: player,
+                evaluation: evaluation,
+                seatIndex: player.seatIndex
+            });
             
-            console.log(`Hand ended early. ${activePlayers[0].name} wins ${this.currentPot}`);
+            console.log(`${player.username}: ${evaluation.handRank} (${evaluation.description})`);
+        }
+        
+        // Sort by hand strength (higher is better)
+        results.sort((a, b) => b.evaluation.handStrength - a.evaluation.handStrength);
+        
+        // Award pot to winner(s)
+        const winners = [results[0]];
+        for (let i = 1; i < results.length; i++) {
+            if (results[i].evaluation.handStrength === results[0].evaluation.handStrength) {
+                winners.push(results[i]);
+            } else {
+                break;
+            }
+        }
+        
+        const winAmount = Math.floor(this.currentPot / winners.length);
+        const winnerData = [];
+        
+        for (const winner of winners) {
+            winner.player.chips += winAmount;
+            winnerData.push({
+                seatIndex: winner.seatIndex,
+                username: winner.player.username,
+                winAmount: winAmount,
+                handRank: winner.evaluation.handRank,
+                description: winner.evaluation.description
+            });
             
-            // Schedule next hand
-            setTimeout(() => {
-                this.startNewHand();
-            }, 3000);
+            console.log(`${winner.player.username} wins ${winAmount} chips with ${winner.evaluation.description}`);
         }
         
-        await this.saveToRedis();
+        this.broadcastGameState({
+            event: 'hand_ended',
+            winners: winnerData
+        });
     }
 
-    async handlePlayerDisconnect(userId) {
-        const playerSeat = this.findPlayerSeat(userId);
-        if (playerSeat !== -1) {
-            const player = this.players[playerSeat];
-            if (player) {
-                player.sitting_out = true;
-                
-                // If it's their turn and hand is active, auto-fold
-                if (this.activeHand && this.actionOn === playerSeat) {
-                    await this.executeAction(playerSeat, 'fold', 0);
-                    await this.moveToNextPlayer();
-                }
-            }
-        }
-    }
-
-    // Utility methods
-    countActivePlayers() {
-        let count = 0;
-        for (let i = 0; i < this.players.length; i++) {
-            if (this.players[i] !== null && !this.players[i].sitting_out) {
-                count++;
-            }
-        }
-        console.log(`PokerGameEngine: Counted ${count} active players at table ${this.tableId}`);
-        return count;
-    }
-
-    getActivePlayers() {
-        return this.players.filter(p => p !== null && !p.folded);
-    }
-
-    getActivePlayerSeats() {
-        const seats = [];
-        for (let i = 0; i < this.players.length; i++) {
-            if (this.players[i] !== null) {
-                seats.push(i);
-            }
-        }
-        return seats.sort((a, b) => a - b);
-    }
-
-    findPlayerSeat(userId) {
-        for (let i = 0; i < this.players.length; i++) {
-            if (this.players[i] && (this.players[i].user_id === userId || this.players[i].userId === userId)) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    getBettingLimits() {
-        if (this.actionOn === -1) return {};
-        
-        const player = this.players[this.actionOn];
-        if (!player) return {};
-        
-        const callAmount = this.currentBet - player.bet;
-        const minRaise = this.currentBet + this.bigBlind;
-        const maxBet = player.chips + player.bet;
-        
-        return {
-            min_bet: minRaise,
-            max_bet: maxBet,
-            default_bet: Math.min(minRaise, maxBet),
-            call_amount: callAmount,
-            can_check: callAmount === 0
-        };
-    }
-
-    async getGameState() {
-        return {
+    broadcastGameState(eventData = {}) {
+        const gameState = {
             tableId: this.tableId,
             stakeLevel: this.stakeLevel,
-            stake_level: this.stakeLevel, // Add both field names for compatibility
+            stake_level: this.stakeLevel,
             gamePhase: this.activeHand ? this.currentRound : 'waiting',
-            current_round: this.activeHand ? this.currentRound : 'waiting', // Add both field names
+            current_round: this.activeHand ? this.currentRound : 'waiting',
             active_hand: this.activeHand,
             players: this.players.map((player, index) => {
-                if (!player) return null;
+                if (player === null) return null;
+                
                 return {
                     ...player,
                     seatIndex: index,
-                    chips: player.chips || 0 // Ensure chips is never null
+                    actionOn: this.actionOn === index,
+                    action_on: this.actionOn === index
                 };
             }),
             dealer_position: this.dealerPosition,
-            current_pot: this.currentPot || 0, // Ensure pot is never null
-            current_bet: this.currentBet || 0,
+            current_pot: this.currentPot,
+            current_bet: this.currentBet,
             community_cards: this.communityCards,
             action_on: this.actionOn,
+            actionOn: this.actionOn,
             hand_number: this.handNumber,
             last_raise_amount_this_round: this.lastRaiseAmountThisRound,
             rake_eligible: this.rakeEligible,
             total_rake: this.totalRake,
             hand_rake: this.handRake,
-            betting_limits: this.getBettingLimits() // Added betting limits for frontend
+            betting_limits: this.getBettingLimits()
         };
+
+        const message = {
+            type: 'game_state',
+            data: {
+                ...eventData,
+                gameState: gameState
+            }
+        };
+
+        // Broadcast to all clients
+        if (this.websocketServer) {
+            this.websocketServer.broadcast(JSON.stringify(message));
+            console.log(`Broadcasted game state: ${eventData.event || 'state_update'}`);
+        }
+    }
+
+    getBettingLimits() {
+        if (!this.activeHand || this.actionOn === -1) {
+            return {};
+        }
+
+        const player = this.players[this.actionOn];
+        if (!player) {
+            return {};
+        }
+
+        const callAmount = Math.max(0, this.currentBet - player.bet);
+        const canCheck = callAmount === 0;
+        const minRaise = this.currentBet + Math.max(this.bigBlind, this.lastRaiseAmountThisRound);
+        const maxRaise = player.chips + player.bet;
+
+        return {
+            min_bet: minRaise,
+            max_bet: maxRaise,
+            default_bet: Math.min(minRaise, maxRaise),
+            call_amount: callAmount,
+            can_check: canCheck
+        };
+    }
+
+    // Save state periodically
+    async startPeriodicSave() {
+        setInterval(async () => {
+            if (this.activeHand) {
+                await this.saveToRedis();
+            }
+        }, 30000); // Save every 30 seconds during active hands
     }
 }
 
 module.exports = PokerGameEngine;
-
