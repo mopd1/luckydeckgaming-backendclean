@@ -319,6 +319,13 @@ class PokerGameEngine {
                 player.folded = true;
                 player.last_action = 'fold';
                 console.log(`Player ${player.name} folds`);
+                
+                // CRITICAL: Clear action from folded player immediately to prevent stuck scenarios
+                if (this.actionOn === seatIndex) {
+                    console.log(`🔧 Player ${player.name} folded and had action, clearing actionOn`);
+                    this.actionOn = -1; // Will be set properly in moveToNextPlayer()
+                }
+                
                 return { success: true, action: { type: 'fold', player: player.name, seatIndex } };
                 
             case 'check':
@@ -390,6 +397,37 @@ class PokerGameEngine {
         
         console.log(`🎯 moveToNextPlayer: Current action on seat ${this.actionOn}, ${activePlayers.length} active players`);
         console.log(`   Current bet: ${this.currentBet}, Last aggressive actor: ${this.lastAggressiveActor}`);
+        
+        // PRIORITY CHECK: If action is currently on a folded player, this is a critical error
+        if (this.actionOn !== -1 && this.players[this.actionOn] && this.players[this.actionOn].folded) {
+            console.log(`🚨 CRITICAL BUG: moveToNextPlayer called with action on FOLDED player at seat ${this.actionOn}!`);
+            console.log(`   Player ${this.players[this.actionOn].name} is folded but still has action`);
+            
+            // Clear the action and find next player
+            this.actionOn = -1;
+        }
+        
+        // HANDLE: If actionOn is -1 (no current action), we need to find the next player to act
+        if (this.actionOn === -1) {
+            console.log(`🔍 Finding next player to act (actionOn was -1)`);
+            
+            // Start from dealer and find first player who needs to act
+            for (let i = 0; i < 5; i++) {
+                const checkSeat = (this.dealerPosition + 1 + i) % 5;
+                if (this.players[checkSeat] && !this.players[checkSeat].folded && this.players[checkSeat].chips > 0) {
+                    // Check if this player needs to act based on current betting situation
+                    const player = this.players[checkSeat];
+                    const needsToAct = player.bet < this.currentBet || 
+                                     (this.lastAggressiveActor !== -1 && checkSeat === this.lastAggressiveActor && player.bet >= this.currentBet);
+                    
+                    if (needsToAct) {
+                        console.log(`   🎯 Found next player: seat ${checkSeat} (${player.name})`);
+                        this.actionOn = checkSeat;
+                        break;
+                    }
+                }
+            }
+        }
         
         // Check if only one non-folded player left
         const nonFoldedPlayers = this.players.filter(p => p !== null && !p.folded);
@@ -549,20 +587,26 @@ class PokerGameEngine {
         }
         
         // CRITICAL: Handle if action is stuck on folded player
-        if (!bettingRoundComplete && nextSeat === -1 && this.actionOn !== -1) {
+        if (this.actionOn !== -1) {
             const currentPlayer = this.players[this.actionOn];
             if (currentPlayer && currentPlayer.folded) {
-                console.log(`🚨 Action stuck on folded player at seat ${this.actionOn}, finding next active player...`);
+                console.log(`🚨 CRITICAL: Action stuck on folded player at seat ${this.actionOn}!`);
                 
-                // Find ANY active player
-                for (let i = 0; i < 5; i++) {
-                    const checkSeat = (this.actionOn + 1 + i) % 5;
+                // EMERGENCY: Find next active player immediately
+                for (let i = 1; i < 5; i++) {
+                    const checkSeat = (this.actionOn + i) % 5;
                     if (this.players[checkSeat] && !this.players[checkSeat].folded && this.players[checkSeat].chips > 0) {
                         nextSeat = checkSeat;
                         bettingRoundComplete = false;
-                        console.log(`   🔧 Found active player at seat ${nextSeat}`);
+                        console.log(`   🔧 EMERGENCY: Moving action from folded seat ${this.actionOn} to active seat ${nextSeat}`);
                         break;
                     }
+                }
+                
+                // If we still can't find anyone, check if round should complete
+                if (nextSeat === -1) {
+                    console.log(`   🏁 EMERGENCY: No active players found, completing betting round`);
+                    bettingRoundComplete = true;
                 }
             }
         }
