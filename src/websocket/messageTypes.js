@@ -6,6 +6,7 @@ const MessageTypes = {
         LEAVE_TABLE: 'leave_table',
         POKER_ACTION: 'poker_action',
         REQUEST_TABLE_LIST: 'request_table_list',
+        REQUEST_GAME_STATE: 'request_game_state',
         PING: 'ping'
     },
     

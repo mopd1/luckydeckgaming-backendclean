@@ -22,14 +22,16 @@ class TableManager {
                 throw new Error('Invalid stake level');
             }
 
-            // First, try to find an available table for this stake level
-            const availableTable = await this.findAvailableTable(stakeLevel);
+            // First, try to find an available table for this stake level WITH OTHER HUMANS
+            const availableTable = await this.findAvailableTable(stakeLevel, userId);
             
             if (availableTable) {
+                console.log(`Found available table ${availableTable.tableId} with ${availableTable.humanPlayerCount} human players`);
                 return availableTable;
             }
 
             // No available table found, create a new one
+            console.log(`Creating new table for stake level ${stakeLevel} - no available tables with humans`);
             return await this.createNewTable(stakeLevel);
 
         } catch (error) {
@@ -38,7 +40,7 @@ class TableManager {
         }
     }
 
-    async findAvailableTable(stakeLevel) {
+    async findAvailableTable(stakeLevel, userId) {
         try {
             const tablePattern = `poker:table:${stakeLevel}:*`;
             const tableKeys = await redisClient.keys(tablePattern);
@@ -50,14 +52,20 @@ class TableManager {
                 const table = JSON.parse(tableData);
                 const humanPlayerCount = this.countHumanPlayers(table);
                 
-                // Check if table has space for another human player
-                if (humanPlayerCount < this.maxHumanPlayers) {
-                    return {
-                        tableId: table.tableId,
-                        stakeLevel: table.stakeLevel,
-                        availableSeats: this.getAvailableSeats(table),
-                        humanPlayerCount: humanPlayerCount
-                    };
+                // IMPORTANT: Only return tables that have other human players
+                // This ensures when a player leaves and rejoins, they get a new table
+                // unless there's another human player at the same stake level
+                if (humanPlayerCount > 0 && humanPlayerCount < this.maxHumanPlayers) {
+                    // Check if the user is already at this table
+                    const isPlayerAtTable = this.isPlayerAtTable(table, userId);
+                    if (!isPlayerAtTable) {
+                        return {
+                            tableId: table.tableId,
+                            stakeLevel: table.stakeLevel,
+                            availableSeats: this.getAvailableSeats(table),
+                            humanPlayerCount: humanPlayerCount
+                        };
+                    }
                 }
             }
 
@@ -66,6 +74,20 @@ class TableManager {
             console.error('Error finding available table:', error);
             return null;
         }
+    }
+
+    isPlayerAtTable(table, userId) {
+        if (!table.players) return false;
+        
+        const players = table.players instanceof Map ? table.players : new Map(table.players);
+        
+        for (const player of players.values()) {
+            if (player.userId === userId) {
+                return true;
+            }
+        }
+        
+        return false;
     }
 
     async createNewTable(stakeLevel) {
@@ -247,6 +269,91 @@ class TableManager {
                 success: false,
                 error: error.message
             };
+        }
+    }
+
+    async removePlayerFromTable(tableId, userId) {
+        try {
+            const tableKey = `poker:table:*:${tableId}`;
+            const tableKeys = await redisClient.keys(tableKey);
+            
+            if (tableKeys.length === 0) {
+                console.log(`Table ${tableId} not found for player removal`);
+                return { success: false, error: 'Table not found' };
+            }
+
+            const tableData = await redisClient.get(tableKeys[0]);
+            const table = JSON.parse(tableData);
+            
+            // Remove player from table
+            if (table.players) {
+                if (Array.isArray(table.players)) {
+                    table.players = table.players.filter(([seatIndex, player]) => player.userId !== userId);
+                } else {
+                    // Handle Map format
+                    const players = new Map(table.players);
+                    for (const [seatIndex, player] of players) {
+                        if (player.userId === userId) {
+                            players.delete(seatIndex);
+                            break;
+                        }
+                    }
+                    table.players = Array.from(players);
+                }
+            }
+
+            table.lastActivity = Date.now();
+            
+            // Check if table should be destroyed (no human players left)
+            const humanPlayerCount = this.countHumanPlayers(table);
+            
+            if (humanPlayerCount === 0) {
+                console.log(`Destroying table ${tableId} - no human players left`);
+                await redisClient.del(tableKeys[0]);
+                return { success: true, tableDestroyed: true };
+            } else {
+                // Save updated table
+                await redisClient.setex(tableKeys[0], 7200, JSON.stringify(table));
+                console.log(`Removed player ${userId} from table ${tableId}. ${humanPlayerCount} human players remaining.`);
+                return { success: true, tableDestroyed: false, remainingHumans: humanPlayerCount };
+            }
+
+        } catch (error) {
+            console.error('Error removing player from table:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    async cleanupEmptyTables() {
+        try {
+            const tablePattern = 'poker:table:*';
+            const tableKeys = await redisClient.keys(tablePattern);
+            
+            let cleanedCount = 0;
+            
+            for (const tableKey of tableKeys) {
+                const tableData = await redisClient.get(tableKey);
+                if (!tableData) continue;
+
+                const table = JSON.parse(tableData);
+                const humanPlayerCount = this.countHumanPlayers(table);
+                
+                // Remove tables with no human players
+                if (humanPlayerCount === 0) {
+                    await redisClient.del(tableKey);
+                    cleanedCount++;
+                    console.log(`Cleaned up empty table: ${table.tableId}`);
+                }
+            }
+            
+            if (cleanedCount > 0) {
+                console.log(`Cleaned up ${cleanedCount} empty tables`);
+            }
+            
+            return cleanedCount;
+        } catch (error) {
+            console.error('Error cleaning up empty tables:', error);
+            return 0;
         }
     }
 

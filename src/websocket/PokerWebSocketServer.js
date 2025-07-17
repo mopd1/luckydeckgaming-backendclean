@@ -38,6 +38,11 @@ class PokerWebSocketServer {
         // Redis pub/sub for cross-instance communication
         this.setupRedisSubscriptions();
         
+        // Cleanup empty tables periodically
+        setInterval(() => {
+            this.cleanupEmptyTables();
+        }, 300000); // Every 5 minutes
+        
         logger.info(`Poker WebSocket server initialized`);
     }
 
@@ -186,6 +191,10 @@ class PokerWebSocketServer {
 
             case MessageTypes.CLIENT.REQUEST_TABLE_LIST:
                 await this.handleTableListRequest(ws, message.stakeLevel);
+                break;
+
+            case MessageTypes.CLIENT.REQUEST_GAME_STATE:
+                await this.handleGameStateRequest(ws);
                 break;
 
             case MessageTypes.CLIENT.PING:
@@ -391,9 +400,42 @@ class PokerWebSocketServer {
         const client = this.clients.get(ws);
         if (!client || !client.currentTable) return;
 
-        const gameEngine = this.gameEngines.get(client.currentTable);
-        if (gameEngine) {
-            await gameEngine.removePlayer(client.userId);
+        const tableManager = require('../../services/tableManager');
+        
+        try {
+            // Remove player from table in Redis
+            const removeResult = await tableManager.removePlayerFromTable(client.currentTable, client.userId);
+            
+            if (removeResult.success) {
+                console.log(`Player ${client.userId} left table ${client.currentTable}`);
+                
+                // Clean up game engine if table was destroyed
+                if (removeResult.tableDestroyed) {
+                    console.log(`Table ${client.currentTable} was destroyed`);
+                    const gameEngine = this.gameEngines.get(client.currentTable);
+                    if (gameEngine) {
+                        this.gameEngines.delete(client.currentTable);
+                    }
+                } else {
+                    // Update game engine
+                    const gameEngine = this.gameEngines.get(client.currentTable);
+                    if (gameEngine) {
+                        await gameEngine.removePlayer(client.userId);
+                        
+                        // Notify other players
+                        await this.broadcastToTable(client.currentTable, {
+                            type: MessageTypes.SERVER.GAME_STATE,
+                            data: {
+                                event: 'player_left',
+                                playerId: client.userId,
+                                gameState: await gameEngine.getGameState()
+                            }
+                        });
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error handling leave table:', error);
         }
 
         const tableId = client.currentTable;
@@ -404,16 +446,43 @@ class PokerWebSocketServer {
             type: MessageTypes.SERVER.TABLE_LEFT,
             tableId: tableId
         });
+    }
 
-        // Notify other players
-        await this.broadcastToTable(tableId, {
-            type: MessageTypes.SERVER.GAME_STATE,
-            data: {
-                event: 'player_left',
-                playerId: client.userId,
-                gameState: gameEngine ? await gameEngine.getGameState() : null
-            }
-        });
+    async handleGameStateRequest(ws) {
+        const client = this.clients.get(ws);
+        if (!client || !client.currentTable) {
+            this.sendToClient(ws, {
+                type: MessageTypes.SERVER.ERROR,
+                error: 'Not seated at a table'
+            });
+            return;
+        }
+
+        const gameEngine = this.gameEngines.get(client.currentTable);
+        if (!gameEngine) {
+            this.sendToClient(ws, {
+                type: MessageTypes.SERVER.ERROR,
+                error: 'Table not found'
+            });
+            return;
+        }
+
+        try {
+            const gameState = await gameEngine.getGameState();
+            this.sendToClient(ws, {
+                type: MessageTypes.SERVER.GAME_STATE,
+                data: {
+                    event: 'game_state_requested',
+                    gameState: gameState
+                }
+            });
+        } catch (error) {
+            logger.error('Error getting game state:', error);
+            this.sendToClient(ws, {
+                type: MessageTypes.SERVER.ERROR,
+                error: 'Failed to get game state'
+            });
+        }
     }
 
     async handleTableListRequest(ws, stakeLevel) {
@@ -449,6 +518,30 @@ class PokerWebSocketServer {
                 type: MessageTypes.SERVER.ERROR,
                 error: 'Failed to retrieve table list'
             });
+        }
+    }
+
+    async cleanupEmptyTables() {
+        try {
+            const tableManager = require('../../services/tableManager');
+            const cleanedCount = await tableManager.cleanupEmptyTables();
+            
+            // Also clean up local game engines for destroyed tables
+            if (cleanedCount > 0) {
+                const tableManager = require('../../services/tableManager');
+                const existingTables = await tableManager.getTableList();
+                const existingTableIds = new Set(existingTables.map(t => t.tableId));
+                
+                // Remove game engines for tables that no longer exist
+                for (const [tableId, gameEngine] of this.gameEngines) {
+                    if (!existingTableIds.has(tableId)) {
+                        this.gameEngines.delete(tableId);
+                        console.log(`Cleaned up game engine for deleted table: ${tableId}`);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error in cleanup process:', error);
         }
     }
 
@@ -510,15 +603,13 @@ class PokerWebSocketServer {
         if (client) {
             client.connected = false;
             
+            // Leave table when disconnecting
             if (client.currentTable) {
-                const gameEngine = this.gameEngines.get(client.currentTable);
-                if (gameEngine) {
-                    await gameEngine.handlePlayerDisconnect(client.userId);
-                }
+                await this.handleLeaveTable(ws);
             }
             
             this.clients.delete(ws);
-            logger.info(`Client disconnected: ${client.id}`);
+            logger.info(`Client disconnected: ${client.id} (${client.username})`);
         }
     }
 

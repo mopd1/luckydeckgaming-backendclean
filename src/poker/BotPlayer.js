@@ -71,7 +71,7 @@ class BotPlayer {
         const c1Val = CARD_VALUES[c1Rank];
         const c2Val = CARD_VALUES[c2Rank];
 
-        if (!c1Val || !c2Val) return 0;
+        if (c1Val === undefined || c2Val === undefined) return 0;
 
         const isPair = (c1Val === c2Val);
         const isSuited = (c1Suit === c2Suit);
@@ -133,7 +133,7 @@ class BotPlayer {
     // Calculate bet size (matching Bot.gd logic)
     calculateBetSize(tableData, handStrength, isBluff) {
         const potSize = parseFloat(tableData.current_pot || 0);
-        const minRaiseStake = parseFloat(tableData.stake_level);
+        const minRaiseStake = parseFloat(tableData.stake_level || 100);
         const currentBet = parseFloat(tableData.current_bet || 0);
         const botBet = parseFloat(tableData.players[this.seatIndex].bet || 0);
         const botChips = parseFloat(tableData.players[this.seatIndex].chips || 0);
@@ -172,83 +172,219 @@ class BotPlayer {
         return Math.min(Math.floor(targetBetAmount), maxBet);
     }
 
-    // Main decision making (matching Bot.gd flow)
+    // Main decision making - completely rewritten to match Bot.gd logic
     makeDecision(tableData) {
         const player = tableData.players[this.seatIndex];
-        const callAmount = tableData.current_bet - player.bet;
-        const isRaised = tableData.current_bet > tableData.stake_level; // Big blind or higher
-        
-        // Preflop decision
-        if (tableData.current_round === 'preflop') {
-            if (!this.shouldPlayPreflop(player.cards, isRaised)) {
-                return { action: 'fold', amount: 0 };
+        if (!player) {
+            console.error(`BotPlayer: Player not found at seat ${this.seatIndex}`);
+            return { action: 'fold', amount: 0 };
+        }
+
+        const botChips = parseFloat(player.chips || 0);
+        const botBet = parseFloat(player.bet || 0);
+        const currentBet = parseFloat(tableData.current_bet || 0);
+        const potSize = parseFloat(tableData.current_pot || 0);
+        const callAmount = currentBet - botBet;
+        const isPreflop = (tableData.gamePhase === 'preflop');
+        const canCheck = callAmount <= 0.01;
+
+        console.log(`Bot ${this.displayName} decision: Phase=${tableData.gamePhase}, CurrentBet=${currentBet}, BotBet=${botBet}, CallAmount=${callAmount}, Chips=${botChips}`);
+
+        // Validate basic state
+        if (botChips <= 0) {
+            console.log(`Bot ${this.displayName} has no chips, folding`);
+            return { action: 'fold', amount: 0 };
+        }
+
+        // All-in situation check (matching Bot.gd logic)
+        if (callAmount > 0.01 && callAmount >= botChips - 0.01) {
+            console.log(`Bot ${this.displayName} facing all-in call situation (Call: ${callAmount.toFixed(2)}, Chips: ${botChips.toFixed(2)})`);
+            return this.makeAllInDecision(tableData, player);
+        }
+
+        // Preflop logic (matching Bot.gd)
+        if (isPreflop) {
+            const stakeLevel = parseFloat(tableData.stake_level || 100);
+            const isRaisedToBBot = currentBet > stakeLevel;
+            
+            if (!this.shouldPlayPreflop(player.cards, isRaisedToBBot)) {
+                if (canCheck) {
+                    console.log(`Bot ${this.displayName} checks preflop (weak hand)`);
+                    return { action: 'check', amount: 0 };
+                } else {
+                    console.log(`Bot ${this.displayName} folds preflop (weak hand)`);
+                    return { action: 'fold', amount: 0 };
+                }
+            }
+
+            const aggression = this.getAggressionFactor();
+            const preflopStrengthCat = this.getPreflopStrengthCategory(player.cards);
+            let raiseChance = 0.0;
+            
+            if (preflopStrengthCat >= 2) raiseChance = aggression * 1.5;
+            else if (preflopStrengthCat >= 1) raiseChance = aggression * 0.8;
+
+            if (Math.random() < raiseChance) {
+                const raiseAmount = this.calculatePreflopRaiseSize(tableData, player);
+                console.log(`Bot ${this.displayName} raises preflop to ${raiseAmount}`);
+                return { action: 'raise', amount: raiseAmount };
+            } else {
+                console.log(`Bot ${this.displayName} calls/checks preflop`);
+                return { action: canCheck ? 'check' : 'call', amount: 0 };
             }
         }
 
-        // Post-flop hand evaluation
-        let handStrength = 0.5; // Default neutral strength
-        if (tableData.community_cards && tableData.community_cards.length > 0) {
-            const handInfo = HandEvaluator.evaluateHand(player.cards, tableData.community_cards);
-            handStrength = this.normalizeHandStrength(handInfo);
-        } else {
-            // Preflop strength
-            handStrength = this.getPreflopStrengthCategory(player.cards) / 3.0;
+        // Postflop logic (matching Bot.gd)
+        const handInfo = HandEvaluator.evaluateHand(player.cards, tableData.community_cards);
+        if (!handInfo) {
+            console.error(`Bot ${this.displayName} could not evaluate postflop hand!`);
+            return { action: canCheck ? 'check' : 'fold', amount: 0 };
         }
 
-        const aggressionFactor = this.getAggressionFactor();
-        const bluffFrequency = this.getBluffFrequency();
-        const isBluff = Math.random() < bluffFrequency && handStrength < 0.3;
+        const handStrength = handInfo.rank;
+        const aggression = this.getAggressionFactor();
+        const bluffFreq = this.getBluffFrequency();
+        let shouldBetOrRaise = false;
+        let isBluffAttempt = false;
 
-        // Decision logic
-        if (callAmount === 0) {
-            // Can check
-            if (handStrength > 0.6 || (isBluff && Math.random() < aggressionFactor)) {
-                // Consider betting
-                const betSize = this.calculateBetSize(tableData, handStrength, isBluff);
-                return { action: 'raise', amount: betSize };
+        // Determine if bot should bet/raise
+        if (handStrength >= 1) { // Pair or better
+            if (Math.random() < aggression) {
+                shouldBetOrRaise = true;
+            }
+        } else if (Math.random() < bluffFreq) {
+            shouldBetOrRaise = true;
+            isBluffAttempt = true;
+        }
+
+        if (canCheck) {
+            // Can check - decide whether to bet
+            if (shouldBetOrRaise) {
+                const betAmount = this.calculateBetSize(tableData, handStrength, isBluffAttempt);
+                if (betAmount <= currentBet) {
+                    console.log(`Bot ${this.displayName} checks postflop (calculated bet was too small)`);
+                    return { action: 'check', amount: 0 };
+                }
+                console.log(`Bot ${this.displayName} bets postflop to ${betAmount} (Bluff: ${isBluffAttempt})`);
+                return { action: 'raise', amount: betAmount };
             } else {
+                console.log(`Bot ${this.displayName} checks postflop`);
                 return { action: 'check', amount: 0 };
             }
         } else {
-            // Need to call or fold
-            const potOdds = callAmount / (tableData.current_pot + callAmount);
-            const handEquity = handStrength;
-
-            if (handEquity > potOdds * 1.5 || (handStrength > 0.7)) {
-                // Consider raising
-                if (Math.random() < aggressionFactor && handStrength > 0.5) {
-                    const raiseSize = this.calculateBetSize(tableData, handStrength, isBluff);
-                    return { action: 'raise', amount: raiseSize };
+            // Facing a bet - decide call/raise/fold
+            if (shouldBetOrRaise) {
+                const raiseAmount = this.calculateBetSize(tableData, handStrength, isBluffAttempt);
+                if (raiseAmount > currentBet + 0.01) {
+                    console.log(`Bot ${this.displayName} raises postflop to ${raiseAmount} (Bluff: ${isBluffAttempt})`);
+                    return { action: 'raise', amount: raiseAmount };
                 } else {
-                    return { action: 'call', amount: callAmount };
+                    console.log(`Bot ${this.displayName} calls postflop (intended raise too small)`);
+                    return { action: 'call', amount: 0 };
                 }
-            } else if (handEquity > potOdds || handStrength > 0.4) {
-                return { action: 'call', amount: callAmount };
             } else {
-                return { action: 'fold', amount: 0 };
+                // Passive: call or fold
+                let shouldFoldWeak = false;
+                if (handStrength < 1) { // Weaker than a pair
+                    const potOdds = callAmount / (potSize + callAmount);
+                    
+                    if (potOdds > 0.4 && this.playstyle !== Playstyle.LP && this.playstyle !== Playstyle.MANIAC) {
+                        shouldFoldWeak = true;
+                    } else if (this.playstyle === Playstyle.LP || this.playstyle === Playstyle.MANIAC) {
+                        if (callAmount < botChips * 0.6 && Math.random() < 0.8) {
+                            shouldFoldWeak = false;
+                        } else if (callAmount >= botChips * 0.6) {
+                            shouldFoldWeak = true;
+                        } else {
+                            shouldFoldWeak = false;
+                        }
+                    } else if (callAmount > botChips * 0.5) {
+                        shouldFoldWeak = true;
+                    }
+                }
+
+                if (shouldFoldWeak) {
+                    console.log(`Bot ${this.displayName} folds postflop (weak hand vs bet)`);
+                    return { action: 'fold', amount: 0 };
+                } else {
+                    console.log(`Bot ${this.displayName} calls postflop`);
+                    return { action: 'call', amount: 0 };
+                }
             }
         }
     }
 
-    // Helper function to normalize hand strength to 0-1 scale
-    normalizeHandStrength(handInfo) {
-        if (!handInfo) return 0.1;
+    // All-in decision logic (matching Bot.gd)
+    makeAllInDecision(tableData, player) {
+        const callAmount = parseFloat(tableData.current_bet || 0) - parseFloat(player.bet || 0);
+        const isPreflop = (tableData.gamePhase === 'preflop');
         
-        // Rough normalization based on hand rank
-        const rankStrengths = {
-            0: 0.1,  // High card
-            1: 0.25, // Pair
-            2: 0.4,  // Two pair
-            3: 0.55, // Three of a kind
-            4: 0.7,  // Straight
-            5: 0.75, // Flush  
-            6: 0.85, // Full house
-            7: 0.95, // Four of a kind
-            8: 0.98, // Straight flush
-            9: 1.0   // Royal flush
-        };
+        let handStrength = 0;
+        if (isPreflop) {
+            const preflopCat = this.getPreflopStrengthCategory(player.cards);
+            handStrength = preflopCat >= 2 ? 1 : 0; // Good or better = 1, else 0
+        } else {
+            const handInfo = HandEvaluator.evaluateHand(player.cards, tableData.community_cards);
+            handStrength = (handInfo && handInfo.rank >= 1) ? 1 : 0; // Pair or better = 1, else 0
+        }
 
-        return rankStrengths[handInfo.rank] || 0.1;
+        // All-in call/fold logic based on playstyle (matching Bot.gd)
+        let shouldCallAllIn = false;
+        switch (this.playstyle) {
+            case Playstyle.NIT:
+                shouldCallAllIn = handStrength >= 1; // Only call with strong hands
+                break;
+            case Playstyle.TAG:
+                shouldCallAllIn = handStrength >= 1; // Call with pairs or better
+                break;
+            case Playstyle.LAG:
+                shouldCallAllIn = handStrength >= 1 || Math.random() < 0.3; // Call wider
+                break;
+            case Playstyle.LP:
+                shouldCallAllIn = handStrength >= 1 || Math.random() < 0.8; // Calling station
+                break;
+            case Playstyle.MANIAC:
+                shouldCallAllIn = Math.random() < 0.9; // Almost always call
+                break;
+        }
+
+        const action = shouldCallAllIn ? 'call' : 'fold';
+        console.log(`Bot ${this.displayName} all-in decision: ${action}`);
+        return { action, amount: 0 };
+    }
+
+    // Calculate preflop raise size (matching Bot.gd)
+    calculatePreflopRaiseSize(tableData, player) {
+        const currentBet = parseFloat(tableData.current_bet || 0);
+        const stakeLevel = parseFloat(tableData.stake_level || 100);
+        const botBet = parseFloat(player.bet || 0);
+        const botChips = parseFloat(player.chips || 0);
+        const potSize = parseFloat(tableData.current_pot || 0);
+        const callAmount = currentBet - botBet;
+        
+        const lastRaiseAmount = parseFloat(tableData.last_raise_amount_this_round || 0);
+        const minRaiseInc = Math.max(stakeLevel, lastRaiseAmount);
+        const minLegalTotalRaise = currentBet + minRaiseInc;
+
+        let raiseToAmount = 0;
+        const isRaisedToBBot = currentBet > stakeLevel;
+
+        if (!isRaisedToBBot) {
+            // Standard opening raise
+            raiseToAmount = stakeLevel * (2.5 + Math.random() * 1.5); // 2.5-4x BB
+        } else {
+            // Re-raise
+            const threeXRaise = currentBet + minRaiseInc * (2.5 + Math.random() * 1.0); // 2.5-3.5x
+            const potAfterCall = potSize + callAmount;
+            const potSizedRaiseAmount = potAfterCall * 1.0;
+            const potSizedRaiseTotal = currentBet + potSizedRaiseAmount;
+            raiseToAmount = Math.max(threeXRaise, potSizedRaiseTotal);
+        }
+
+        raiseToAmount = Math.max(raiseToAmount, minLegalTotalRaise);
+        const finalTotalBet = Math.min(botBet + botChips, raiseToAmount);
+
+        return Math.floor(finalTotalBet);
     }
 
     // Generate random think time (matching frontend bot timing)
@@ -270,7 +406,7 @@ class BotPlayer {
                 break;
         }
 
-        return Math.min(baseTime, 5.0); // Cap at 5 seconds
+        return Math.min(baseTime, 3.0); // Cap at 3 seconds for testing
     }
 }
 
