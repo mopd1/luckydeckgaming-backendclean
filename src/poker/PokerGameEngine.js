@@ -99,10 +99,35 @@ class PokerGameEngine {
         
         // Load players (both humans and bots)
         this.players = new Array(5).fill(null);
-        if (gameState.players) {
-            for (let i = 0; i < Math.min(gameState.players.length, 5); i++) {
-                if (gameState.players[i]) {
-                    this.players[i] = gameState.players[i];
+        
+        // Load human players from the players array (stored as [seatIndex, playerData] tuples)
+        if (gameState.players && Array.isArray(gameState.players)) {
+            console.log(`Loading ${gameState.players.length} human players from Redis`);
+            for (const [seatIndex, playerData] of gameState.players) {
+                if (playerData && seatIndex >= 0 && seatIndex < 5) {
+                    this.players[seatIndex] = {
+                        ...playerData,
+                        seatIndex: seatIndex,
+                        isBot: false,
+                        had_turn_this_round: false
+                    };
+                    console.log(`Loaded human player ${playerData.username} at seat ${seatIndex}`);
+                }
+            }
+        }
+        
+        // Load bots from the bots array (stored as [seatIndex, botData] tuples)
+        if (gameState.bots && Array.isArray(gameState.bots)) {
+            console.log(`Loading ${gameState.bots.length} bots from Redis`);
+            for (const [seatIndex, botData] of gameState.bots) {
+                if (botData && seatIndex >= 0 && seatIndex < 5) {
+                    this.players[seatIndex] = {
+                        ...botData,
+                        seatIndex: seatIndex,
+                        isBot: true,
+                        had_turn_this_round: false
+                    };
+                    console.log(`Loaded bot ${botData.username} at seat ${seatIndex} with ${botData.chips} chips`);
                 }
             }
         }
@@ -113,12 +138,12 @@ class PokerGameEngine {
         this.currentPot = gameState.currentPot || 0;
         this.currentBet = gameState.currentBet || 0;
         this.communityCards = gameState.communityCards || [];
-        this.currentRound = gameState.currentRound || 'preflop';
+        this.currentRound = gameState.gamePhase || 'waiting';  // Note: gamePhase not currentRound in Redis
         this.actionOn = gameState.actionOn || -1;
         this.handNumber = gameState.handNumber || 0;
         this.lastRaiseAmountThisRound = gameState.lastRaiseAmountThisRound || 0;
         
-        console.log(`Deserialized game state for table ${this.tableId}`);
+        console.log(`Deserialized game state for table ${this.tableId}, phase: ${this.currentRound}`);
     }
 
     serializeGameState() {
@@ -976,7 +1001,8 @@ class PokerGameEngine {
 
         // Broadcast to all clients
         if (this.websocketServer) {
-            this.websocketServer.broadcast(JSON.stringify(message));
+            // Use broadcastToTable method from websocket server
+            this.websocketServer.broadcastToTable(this.tableId, message);
             console.log(`Broadcasted game state: ${eventData.event || 'state_update'}`);
         }
     }
@@ -1014,35 +1040,131 @@ class PokerGameEngine {
         }, 30000); // Save every 30 seconds during active hands
     }
 
-  async getGameState() {
-      return {
-          tableId: this.tableId,
-          stakeLevel: this.stakeLevel,
-          stake_level: this.stakeLevel, // Add both field names for compatibility
-          gamePhase: this.activeHand ? this.currentRound : 'waiting',
-          current_round: this.activeHand ? this.currentRound : 'waiting', // Add both field names
-          active_hand: this.activeHand,
-          players: this.players.map((player, index) => {
-              if (!player) return null;
-              return {
-                  ...player,
-                  seatIndex: index,
-                  chips: player.chips || 0 // Ensure chips is never null
-              };
-          }),
-          dealer_position: this.dealerPosition,
-          current_pot: this.currentPot || 0, // Ensure pot is never null
-          current_bet: this.currentBet || 0,
-          community_cards: this.communityCards,
-          action_on: this.actionOn,
-          hand_number: this.handNumber,
-          last_raise_amount_this_round: this.lastRaiseAmountThisRound,
-          rake_eligible: this.rakeEligible,
-          total_rake: this.totalRake,
-          hand_rake: this.handRake,
-          betting_limits: this.getBettingLimits() // Added betting limits for frontend
-      };
-  }
+    countActivePlayers() {
+        let count = 0;
+        for (let i = 0; i < this.players.length; i++) {
+            if (this.players[i] !== null) {
+                count++;
+            }
+        }
+        console.log(`PokerGameEngine: Counted ${count} active players at table ${this.tableId}`);
+        return count;
+    }
+
+    async removePlayer(userId) {
+        let removedSeat = -1;
+        
+        for (let i = 0; i < this.players.length; i++) {
+            if (this.players[i] && (this.players[i].userId === userId || this.players[i].user_id === userId)) {
+                this.players[i] = null;
+                removedSeat = i;
+                break;
+            }
+        }
+        
+        if (removedSeat === -1) {
+            return { success: false, error: 'Player not found' };
+        }
+        
+        // Handle active hand scenarios
+        if (this.activeHand) {
+            // If it was the player's turn, advance to next player
+            if (this.actionOn === removedSeat) {
+                await this.moveToNextPlayer();
+            }
+            
+            // Check if we still have enough players to continue
+            if (this.countActivePlayers() < 2) {
+                await this.endHand();
+            }
+        }
+        
+        await this.saveToRedis();
+        
+        console.log(`Player removed from seat ${removedSeat} in table ${this.tableId}`);
+        return { success: true };
+    }
+
+    async processAction(userId, action, amount = 0) {
+        // Find player
+        let playerSeat = -1;
+        for (let i = 0; i < this.players.length; i++) {
+            if (this.players[i] && (this.players[i].userId === userId || this.players[i].user_id === userId)) {
+                playerSeat = i;
+                break;
+            }
+        }
+        
+        if (playerSeat === -1) {
+            return { success: false, error: 'Player not found at table' };
+        }
+        
+        // Validate it's player's turn
+        if (this.actionOn !== playerSeat) {
+            return { success: false, error: 'Not your turn' };
+        }
+        
+        if (!this.activeHand) {
+            return { success: false, error: 'No active hand' };
+        }
+        
+        const player = this.players[playerSeat];
+        if (!player || player.folded) {
+            return { success: false, error: 'Invalid player state' };
+        }
+        
+        // Clear action timeout
+        if (this.actionTimeout) {
+            clearTimeout(this.actionTimeout);
+            this.actionTimeout = null;
+        }
+        
+        // Process the action
+        console.log(`🎮 Processing action: ${action} by seat ${playerSeat} (${player.username}) for amount ${amount}`);
+        const actionResult = await this.executeAction(playerSeat, action, amount);
+        
+        if (actionResult.success) {
+            console.log(`✅ Action successful, moving to next player...`);
+            // Move to next player or next phase
+            await this.moveToNextPlayer();
+            await this.saveToRedis();
+        } else {
+            console.log(`❌ Action failed: ${actionResult.error}`);
+        }
+        
+        return actionResult;
+    }
+
+    async getGameState() {
+        return {
+            tableId: this.tableId,
+            stakeLevel: this.stakeLevel,
+            stake_level: this.stakeLevel, // Add both field names for compatibility
+            gamePhase: this.activeHand ? this.currentRound : 'waiting',
+            current_round: this.activeHand ? this.currentRound : 'waiting', // Add both field names
+            active_hand: this.activeHand,
+            players: this.players.map((player, index) => {
+                if (!player) return null;
+                return {
+                    ...player,
+                    seatIndex: index,
+                    chips: player.chips || 0 // Ensure chips is never null
+                };
+            }),
+            dealer_position: this.dealerPosition,
+            current_pot: this.currentPot || 0, // Ensure pot is never null
+            current_bet: this.currentBet || 0,
+            community_cards: this.communityCards,
+            action_on: this.actionOn,
+            hand_number: this.handNumber,
+            last_raise_amount_this_round: this.lastRaiseAmountThisRound,
+            rake_eligible: this.rakeEligible,
+            total_rake: this.totalRake,
+            hand_rake: this.handRake,
+            betting_limits: this.getBettingLimits() // Added betting limits for frontend
+        };
+    }
 }
 
 module.exports = PokerGameEngine;
+
