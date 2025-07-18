@@ -1013,6 +1013,36 @@ class PokerGameEngine {
             }
         }, 30000); // Save every 30 seconds during active hands
     }
+
+  async getGameState() {
+      return {
+          tableId: this.tableId,
+          stakeLevel: this.stakeLevel,
+          stake_level: this.stakeLevel, // Add both field names for compatibility
+          gamePhase: this.activeHand ? this.currentRound : 'waiting',
+          current_round: this.activeHand ? this.currentRound : 'waiting', // Add both field names
+          active_hand: this.activeHand,
+          players: this.players.map((player, index) => {
+              if (!player) return null;
+              return {
+                  ...player,
+                  seatIndex: index,
+                  chips: player.chips || 0 // Ensure chips is never null
+              };
+          }),
+          dealer_position: this.dealerPosition,
+          current_pot: this.currentPot || 0, // Ensure pot is never null
+          current_bet: this.currentBet || 0,
+          community_cards: this.communityCards,
+          action_on: this.actionOn,
+          hand_number: this.handNumber,
+          last_raise_amount_this_round: this.lastRaiseAmountThisRound,
+          rake_eligible: this.rakeEligible,
+          total_rake: this.totalRake,
+          hand_rake: this.handRake,
+          betting_limits: this.getBettingLimits() // Added betting limits for frontend
+      };
+  }
 }
 
 module.exports = PokerGameEngine;
