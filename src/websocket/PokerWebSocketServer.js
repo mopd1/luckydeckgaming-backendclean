@@ -207,18 +207,26 @@ class PokerWebSocketServer {
     }
 
     async handleJoinTable(ws, tableId, seatIndex, buyinAmount) {
+        console.log('=== JOIN TABLE CALLED ===');
+        console.log('BASIC TEST LOG - handleJoinTable was called');
+        
         const client = this.clients.get(ws);
         if (!client || !client.connected) {
+            console.log('ERROR: Invalid client in handleJoinTable');
             logger.error('Attempt to join table with invalid client');
             return;
         }
 
+        console.log(`🎮 JOIN TABLE REQUEST: tableId=${tableId}, seatIndex=${seatIndex}, buyinAmount=${buyinAmount}, userId=${client.userId}`);
+
         try {
             // Leave current table if in one
             if (client.currentTable) {
+                console.log(`🚪 Player leaving current table: ${client.currentTable}`);
                 await this.handleLeaveTable(ws);
             }
 
+            console.log(`📋 Loading tableManager...`);
             const tableManager = require('../../services/tableManager');
         
             // Handle table finding logic
@@ -231,17 +239,22 @@ class PokerWebSocketServer {
                 if (tableId.startsWith("create_table_level_")) {
                     const levelPart = tableId.replace("create_table_level_", "");
                     requestedStakeLevel = parseInt(levelPart) || 1;
-                    console.log(`Creating table for stake level ${requestedStakeLevel}`);
+                    console.log(`🎯 Creating table for stake level ${requestedStakeLevel}`);
                 }
                 
+                console.log(`🔍 Finding or creating table for stake level ${requestedStakeLevel}, userId ${client.userId}`);
                 // Find or create a table for the requested stake level
                 targetTable = await tableManager.findOrCreateTable(requestedStakeLevel, client.userId);
+                console.log(`✅ Table found/created:`, targetTable ? { tableId: targetTable.tableId, stakeLevel: targetTable.stakeLevel } : 'NULL');
             } else {
+                console.log(`🔍 Looking for specific table: ${tableId}`);
                 // Try to get the specific table
                 const tables = await tableManager.getTableList();
+                console.log(`📊 Available tables: ${tables.length}`);
                 targetTable = tables.find(t => t.tableId === tableId);
             
                 if (!targetTable) {
+                    console.log(`❌ Table ${tableId} not found, creating new table for stake level 1`);
                     // Table doesn't exist, create one for stake level 1
                     targetTable = await tableManager.findOrCreateTable(1, client.userId);
                 }
@@ -340,6 +353,9 @@ class PokerWebSocketServer {
             logger.info(`Client ${client.id} joined table ${targetTable.tableId} at seat ${seatResult.seatIndex}`);
 
         } catch (error) {
+            console.error('🚨 ERROR JOINING TABLE:', error);
+            console.error('🚨 ERROR STACK:', error.stack);
+            console.error('🚨 ERROR MESSAGE:', error.message);
             logger.error('Error joining table:', error);
             this.sendToClient(ws, {
                 type: MessageTypes.SERVER.ERROR,
@@ -629,3 +645,4 @@ class PokerWebSocketServer {
 }
 
 module.exports = PokerWebSocketServer;
+

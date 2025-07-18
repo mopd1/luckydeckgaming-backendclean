@@ -17,25 +17,32 @@ class TableManager {
 
     async findOrCreateTable(stakeLevel, userId) {
         try {
+            console.log(`🏦 TableManager.findOrCreateTable: stakeLevel=${stakeLevel}, userId=${userId}`);
             const stakeConfig = this.stakelevels[stakeLevel];
             if (!stakeConfig) {
+                console.error(`❌ Invalid stake level: ${stakeLevel}`);
                 throw new Error('Invalid stake level');
             }
+            console.log(`✅ Stake config found:`, stakeConfig);
 
             // First, try to find an available table for this stake level WITH OTHER HUMANS
+            console.log(`🔍 Looking for available table...`);
             const availableTable = await this.findAvailableTable(stakeLevel, userId);
             
             if (availableTable) {
-                console.log(`Found available table ${availableTable.tableId} with ${availableTable.humanPlayerCount} human players`);
+                console.log(`✅ Found available table ${availableTable.tableId} with ${availableTable.humanPlayerCount} human players`);
                 return availableTable;
             }
 
             // No available table found, create a new one
-            console.log(`Creating new table for stake level ${stakeLevel} - no available tables with humans`);
-            return await this.createNewTable(stakeLevel);
+            console.log(`🏗️ Creating new table for stake level ${stakeLevel} - no available tables with humans`);
+            const newTable = await this.createNewTable(stakeLevel);
+            console.log(`✅ New table created:`, newTable ? { tableId: newTable.tableId } : 'NULL');
+            return newTable;
 
         } catch (error) {
-            console.error('Error in findOrCreateTable:', error);
+            console.error('🚨 Error in findOrCreateTable:', error);
+            console.error('🚨 Stack:', error.stack);
             throw error;
         }
     }
@@ -402,3 +409,4 @@ class TableManager {
 }
 
 module.exports = new TableManager();
+
